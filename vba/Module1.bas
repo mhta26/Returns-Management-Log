@@ -563,7 +563,7 @@ Private Function ValidForm() As Boolean
             If Not IsNumeric(WS(MAIN).Cells(r, 10).Value2) Or Len(CellText(WS(MAIN).Cells(r, 10))) = 0 Then
                 UnicodeMessage UI(57) & " " & r, vbExclamation: Exit Function
             End If
-            If CDbl(WS(MAIN).Cells(r, 10).Value2) <= 0 Or CDbl(WS(MAIN).Cells(r, 10).Value2) > CDbl(Date) Then
+            If CDbl(WS(MAIN).Cells(r, 10).Value2) <= 0 Or CDbl(WS(MAIN).Cells(r, 10).Value2) > 2958465 Then
                 UnicodeMessage UI(57) & " " & r, vbExclamation: Exit Function
             End If
             entries = entries + 1
