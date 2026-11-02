@@ -351,6 +351,21 @@ Private Sub ColorStatuses(ByVal firstRow As Long, ByVal totalRow As Long)
     Dim target As Range, rule As FormatCondition, i As Long, colors As Variant
     Set target = WS(MAIN).Range(WS(MAIN).Cells(firstRow, 11), WS(MAIN).Cells(totalRow - 1, 11))
     colors = Array(RGB(255, 199, 206), RGB(248, 203, 173), RGB(255, 235, 156), RGB(198, 239, 206))
+    Dim unchanged As Boolean
+    unchanged = (target.FormatConditions.Count = 4)
+    If unchanged Then
+        For i = 1 To 4
+            Set rule = target.FormatConditions(i)
+            If rule.Type <> xlCellValue Then
+                unchanged = False
+                Exit For
+            End If
+            If rule.AppliesTo.Address <> target.Address Then unchanged = False
+            If rule.Operator <> xlEqual Then unchanged = False
+            If rule.Formula1 <> "=" & Chr$(34) & UI(61 + i) & Chr$(34) Then unchanged = False
+        Next i
+        If unchanged Then Exit Sub
+    End If
     target.FormatConditions.Delete
     For i = 0 To 3
         Set rule = target.FormatConditions.Add(Type:=xlCellValue, Operator:=xlEqual, Formula1:="=" & Chr$(34) & UI(62 + i) & Chr$(34))
@@ -360,23 +375,30 @@ Private Sub ColorStatuses(ByVal firstRow As Long, ByVal totalRow As Long)
 End Sub
 
 Private Sub EnsureItemRows(ByVal firstRow As Long, ByVal totalRow As Long)
-    Dim r As Long
+    Dim r As Long, template As String
+    template = UI(37)
     For r = firstRow To totalRow - 1
-        WS(MAIN).Cells(r, 1).Value2 = r - firstRow + 1
-        WS(MAIN).Cells(r, 11).FormulaR1C1 = UI(37)
+        If WS(MAIN).Cells(r, 1).Value2 <> r - firstRow + 1 Then WS(MAIN).Cells(r, 1).Value2 = r - firstRow + 1
+        If WS(MAIN).Cells(r, 11).FormulaR1C1 <> template Then WS(MAIN).Cells(r, 11).FormulaR1C1 = template
         If Not HasList(WS(MAIN).Cells(r, 2)) Then SetList WS(MAIN).Cells(r, 2), "InlineProducts"
         If Not HasList(WS(MAIN).Cells(r, 3)) Then SetList WS(MAIN).Cells(r, 3), "InlineProducts"
+        If Not HasList(WS(MAIN).Cells(r, 12)) Then
         With WS(MAIN).Cells(r, 12).Validation
             .Delete
             .Add Type:=xlValidateList, Formula1:="=ReturnReasons"
             .IgnoreBlank = True
             .ShowError = True
         End With
+        End If
     Next r
     ColorStatuses firstRow, totalRow
 End Sub
 
 Private Sub FitReceiptPage(ByVal receipt As Worksheet)
+    Dim previousCommunication As Boolean, errorNumber As Long, errorText As String
+    previousCommunication = Application.PrintCommunication
+    On Error GoTo Failed
+    Application.PrintCommunication = False
     With receipt.PageSetup
         .PrintArea = "$A$1:$M$36"
         .Orientation = xlLandscape
@@ -385,18 +407,36 @@ Private Sub FitReceiptPage(ByVal receipt As Worksheet)
         .FitToPagesWide = 1
         .FitToPagesTall = 1
     End With
+    Application.PrintCommunication = previousCommunication
+    Exit Sub
+Failed:
+    errorNumber = Err.Number
+    errorText = Err.Description
+    On Error Resume Next
+    Application.PrintCommunication = previousCommunication
+    On Error GoTo 0
+    Err.Raise errorNumber, "FitReceiptPage", errorText
 End Sub
 
 Private Sub RefreshTotals(ByVal firstRow As Long, ByVal totalRow As Long)
-    Dim c As Long
+    Dim c As Long, oldEvents As Boolean, errorNumber As Long, errorText As String
+    oldEvents = Application.EnableEvents
+    On Error GoTo Failed
+    Application.EnableEvents = False
     WS(MAIN).Range("I6").Formula = "=NOW()"
     EnsureItemRows firstRow, totalRow
     For c = 7 To 9
         WS(MAIN).Cells(totalRow, c).Formula = "=SUM(" & WS(MAIN).Range(WS(MAIN).Cells(firstRow, c), WS(MAIN).Cells(totalRow - 1, c)).address(False, False) & ")"
     Next c
     WS(MAIN).Range("J8").Formula = "=SUMPRODUCT(--(" & WS(MAIN).Range(WS(MAIN).Cells(firstRow, 2), WS(MAIN).Cells(totalRow - 1, 2)).address(False, False) & "<>""""))"
-    FitReceiptPage WS(MAIN)
     WS(MAIN).Calculate
+    Application.EnableEvents = oldEvents
+    Exit Sub
+Failed:
+    errorNumber = Err.Number
+    errorText = Err.Description
+    Application.EnableEvents = oldEvents
+    Err.Raise errorNumber, "RefreshTotals", errorText
 End Sub
 
 Private Function HasTopSearch() As Boolean
@@ -703,6 +743,7 @@ Public Sub Initialize()
     FormRows firstRow, totalRow
     RepairTableHeadings firstRow
     RefreshTotals firstRow, totalRow
+    FitReceiptPage WS(MAIN)
     WS(SETTINGS).Range("C2").value = NextNumber()
     WS(MAIN).Range("L8").Formula = "=""#""&'" & Replace(WS(SETTINGS).Name, "'", "''") & "'!$C$2"
     FillNames
