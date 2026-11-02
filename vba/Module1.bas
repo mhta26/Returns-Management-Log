@@ -376,6 +376,17 @@ Private Sub EnsureItemRows(ByVal firstRow As Long, ByVal totalRow As Long)
     ColorStatuses firstRow, totalRow
 End Sub
 
+Private Sub FitReceiptPage(ByVal receipt As Worksheet)
+    With receipt.PageSetup
+        .PrintArea = "$A$1:$M$36"
+        .Orientation = xlLandscape
+        .PaperSize = xlPaperA4
+        .Zoom = False
+        .FitToPagesWide = 1
+        .FitToPagesTall = 1
+    End With
+End Sub
+
 Private Sub RefreshTotals(ByVal firstRow As Long, ByVal totalRow As Long)
     Dim c As Long
     WS(MAIN).Range("I6").Formula = "=NOW()"
@@ -384,7 +395,7 @@ Private Sub RefreshTotals(ByVal firstRow As Long, ByVal totalRow As Long)
         WS(MAIN).Cells(totalRow, c).Formula = "=SUM(" & WS(MAIN).Range(WS(MAIN).Cells(firstRow, c), WS(MAIN).Cells(totalRow - 1, c)).address(False, False) & ")"
     Next c
     WS(MAIN).Range("J8").Formula = "=SUMPRODUCT(--(" & WS(MAIN).Range(WS(MAIN).Cells(firstRow, 2), WS(MAIN).Cells(totalRow - 1, 2)).address(False, False) & "<>""""))"
-    WS(MAIN).PageSetup.PrintArea = WS(MAIN).Range("A1:M36").address
+    FitReceiptPage WS(MAIN)
     WS(MAIN).Calculate
 End Sub
 
@@ -844,7 +855,7 @@ Private Sub PrepareReceiptCopy(ByVal number As Long, ByVal totalRow As Long, ByR
     For i = receipt.Shapes.count To 1 Step -1
         If Left$(receipt.Shapes(i).Name, 4) = "btn_" Or receipt.Shapes(i).Type = msoFormControl Then receipt.Shapes(i).Delete
     Next i
-    receipt.PageSetup.PrintArea = receipt.Range(address).address
+    FitReceiptPage receipt
 End Sub
 
 Private Sub ExportReceiptPDF(ByVal receipt As Worksheet, ByVal path As String)
@@ -1097,6 +1108,7 @@ Public Sub ReprintSavedSheet(ByVal sheetName As String)
     copies = CLng(requested)
     If Not Application.Dialogs(xlDialogPrinterSetup).show Then Exit Sub
     BusyPrinting = True
+    FitReceiptPage ThisWorkbook.Worksheets(sheetName)
     ThisWorkbook.Worksheets(sheetName).PrintOut copies:=copies, Collate:=True
     BusyPrinting = previousBusy
     Exit Sub
