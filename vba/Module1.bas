@@ -431,9 +431,9 @@ Private Sub SetList(ByVal dest As Range, ByVal listName As String)
         .IgnoreBlank = True
         .InCellDropdown = True
         .ShowError = False
-        .ShowInput = True
-        .InputTitle = UI(28)
-        .InputMessage = Left$(UI(4), 255)
+        .ShowInput = False
+        .InputTitle = ""
+        .InputMessage = ""
     End With
 End Sub
 
@@ -692,8 +692,8 @@ Public Sub Initialize()
     FormRows firstRow, totalRow
     RepairTableHeadings firstRow
     RefreshTotals firstRow, totalRow
-    WS(SETTINGS).Range("D1").value = NextNumber()
-    WS(MAIN).Range("L8").Formula = "=""#""&'" & Replace(WS(SETTINGS).Name, "'", "''") & "'!$D$1"
+    WS(SETTINGS).Range("C2").value = NextNumber()
+    WS(MAIN).Range("L8").Formula = "=""#""&'" & Replace(WS(SETTINGS).Name, "'", "''") & "'!$C$2"
     FillNames
     BuildList True, ""
     BuildList False, ""
@@ -719,11 +719,8 @@ End Sub
 Private Function NextNumber() As Long
     Dim Sh As Worksheet, n As Long, suffix As String, log As Worksheet, row As Long
     n = 1
-    If IsNumeric(WS(SETTINGS).Range("D1").value) Then
-        If CDbl(WS(SETTINGS).Range("D1").value) >= 1 Then n = CLng(WS(SETTINGS).Range("D1").value)
-    End If
-    If IsNumeric(WS(SETTINGS).Range("C2").Value2) Then
-        If CDbl(WS(SETTINGS).Range("C2").Value2) > n Then n = CLng(WS(SETTINGS).Range("C2").Value2)
+    If IsNumeric(WS(SETTINGS).Range("C2").value) Then
+        If CDbl(WS(SETTINGS).Range("C2").value) >= 1 Then n = CLng(WS(SETTINGS).Range("C2").value)
     End If
     For Each Sh In ThisWorkbook.Worksheets
         If Left$(Sh.Name, 4) = "RET_" Then
@@ -921,7 +918,7 @@ Public Sub ArchiveAndPrint()
     pdfPath = pdfPath & relativeName
     ' Keep a durable filled-in copy until the PDF is successfully exported.
     ThisWorkbook.Save
-    oldCounter = WS(SETTINGS).Range("D1").Value2
+    oldCounter = WS(SETTINGS).Range("C2").Value2
     itemBackup = form.Range(form.Cells(firstRow, 2), form.Cells(totalRow - 1, 10)).Formula
     noteBackup = form.Range(form.Cells(firstRow, 12), form.Cells(totalRow - 1, 13)).Formula
     clientCode = form.Range("A8").Formula
@@ -936,7 +933,7 @@ Public Sub ArchiveAndPrint()
     BusyPrinting = True
     Application.EnableEvents = False
     Application.ScreenUpdating = False
-    WS(SETTINGS).Range("D1").Value2 = number
+    WS(SETTINGS).Range("C2").Value2 = number
     form.Calculate
     PrepareReceiptCopy number, totalRow, temporary, receipt
     ExportReceiptPDF receipt, pdfPath
@@ -972,7 +969,7 @@ Public Sub ArchiveAndPrint()
     form.Range(form.Cells(firstRow, 12), form.Cells(totalRow - 1, 13)).ClearContents
     form.Range("D6").ClearContents
     form.Range("F6").ClearContents
-    WS(SETTINGS).Range("D1").Value2 = number + 1
+    WS(SETTINGS).Range("C2").Value2 = number + 1
     BuildList True, ""
     BuildList False, ""
     RefreshTotals firstRow, totalRow
@@ -1016,7 +1013,7 @@ Failed:
                 form.Range("G12").Formula = topName
             End If
         End If
-        WS(SETTINGS).Range("D1").Value2 = oldCounter
+        WS(SETTINGS).Range("C2").Value2 = oldCounter
         If logRow >= 5 Then log.Range(log.Cells(logRow, 1), log.Cells(logRow, 12)).Clear
         form.Calculate
     End If
