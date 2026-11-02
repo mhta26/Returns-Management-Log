@@ -111,8 +111,8 @@ Private Sub FormRows(ByRef firstRow As Long, ByRef totalRow As Long)
     Next r
     If totalRow = 0 Then Err.Raise vbObjectError + 902, "FormRows", UI(29)
     For r = 1 To totalRow - 1
-        If Normal(CellText(WS(MAIN).Cells(r, 5))) = Normal(UI(30)) Then
-            Set header = WS(MAIN).Cells(r, 5).MergeArea
+        If Normal(CellText(WS(MAIN).Cells(r, 2))) = Normal(UI(30)) Then
+            Set header = WS(MAIN).Cells(r, 2).MergeArea
             firstRow = header.row + header.Rows.count
             Exit For
         End If
@@ -163,41 +163,39 @@ Private Function HasList(ByVal cell As Range) As Boolean
 End Function
 
 Private Sub EnsureItemRows(ByVal firstRow As Long, ByVal totalRow As Long)
-    Dim r As Long, template As String
-    For r = firstRow To totalRow - 1
-        If WS(MAIN).Cells(r, 11).HasFormula Then
-            template = WS(MAIN).Cells(r, 11).FormulaR1C1
-            Exit For
-        End If
-    Next r
-    If Len(template) = 0 Then template = UI(37)
+    Dim r As Long
     For r = firstRow To totalRow - 1
         WS(MAIN).Cells(r, 1).Value2 = r - firstRow + 1
-        If Not WS(MAIN).Cells(r, 11).HasFormula And Len(CellText(WS(MAIN).Cells(r, 11))) = 0 Then
-            WS(MAIN).Cells(r, 11).FormulaR1C1 = template
-        End If
-        If Not HasList(WS(MAIN).Cells(r, 5)) Then SetList WS(MAIN).Cells(r, 5), "InlineProducts"
-        If Not HasList(WS(MAIN).Cells(r, 6)) Then SetList WS(MAIN).Cells(r, 6), "InlineProducts"
+        WS(MAIN).Cells(r, 11).FormulaR1C1 = UI(37)
+        If Not HasList(WS(MAIN).Cells(r, 2)) Then SetList WS(MAIN).Cells(r, 2), "InlineProducts"
+        If Not HasList(WS(MAIN).Cells(r, 3)) Then SetList WS(MAIN).Cells(r, 3), "InlineProducts"
+        With WS(MAIN).Cells(r, 12).Validation
+            .Delete
+            .Add Type:=xlValidateList, Formula1:="=ReturnReasons"
+            .IgnoreBlank = True
+            .ShowError = True
+        End With
     Next r
 End Sub
 
 Private Sub RefreshTotals(ByVal firstRow As Long, ByVal totalRow As Long)
     Dim c As Long
+    WS(MAIN).Range("I6").Formula = "=NOW()"
     EnsureItemRows firstRow, totalRow
     For c = 7 To 9
         WS(MAIN).Cells(totalRow, c).Formula = "=SUM(" & WS(MAIN).Range(WS(MAIN).Cells(firstRow, c), WS(MAIN).Cells(totalRow - 1, c)).address(False, False) & ")"
     Next c
-    WS(MAIN).Range("J9").Formula = "=SUMPRODUCT(--(" & WS(MAIN).Range(WS(MAIN).Cells(firstRow, 5), WS(MAIN).Cells(totalRow - 1, 5)).address(False, False) & "<>""""))"
+    WS(MAIN).Range("J8").Formula = "=SUMPRODUCT(--(" & WS(MAIN).Range(WS(MAIN).Cells(firstRow, 2), WS(MAIN).Cells(totalRow - 1, 2)).address(False, False) & "<>""""))"
     WS(MAIN).PageSetup.PrintArea = WS(MAIN).Range("A1:M" & totalRow).address
     WS(MAIN).Calculate
 End Sub
 
 Private Function HasTopSearch() As Boolean
-    HasTopSearch = (WS(MAIN).Range("D12").MergeArea.address = "$D$12:$E$12" And WS(MAIN).Range("G12").MergeArea.address = "$G$12:$M$12")
+    HasTopSearch = False
 End Function
 
 Private Function SearchInputCells() As Range
-    Set SearchInputCells = Application.Union(WS(MAIN).Range("A9,B9"), ItemCells(5, 6))
+    Set SearchInputCells = Application.Union(WS(MAIN).Range("A8,B8"), ItemCells(2, 3))
     If HasTopSearch() Then Set SearchInputCells = Application.Union(SearchInputCells, WS(MAIN).Range("D12,G12"))
 End Function
 
@@ -208,26 +206,20 @@ Private Function ProductSearchTarget() As Range
         Exit Function
     End If
     For row = FirstItemRow() To LastItemRow()
-        If Len(CellText(WS(MAIN).Cells(row, 5))) = 0 And Len(CellText(WS(MAIN).Cells(row, 6))) = 0 Then
-            Set ProductSearchTarget = WS(MAIN).Cells(row, 6)
+        If Len(CellText(WS(MAIN).Cells(row, 2))) = 0 And Len(CellText(WS(MAIN).Cells(row, 3))) = 0 Then
+            Set ProductSearchTarget = WS(MAIN).Cells(row, 3)
             Exit Function
         End If
     Next row
-    Set ProductSearchTarget = WS(MAIN).Cells(FirstItemRow(), 6)
+    Set ProductSearchTarget = WS(MAIN).Cells(FirstItemRow(), 3)
 End Function
 
 Private Sub RepairTableHeadings(ByVal firstRow As Long)
-    Dim headerRow As Long
-    If HasTopSearch() Then Exit Sub
-    headerRow = WS(MAIN).Cells(firstRow - 1, 5).MergeArea.row
-    If Len(CellText(WS(MAIN).Cells(headerRow, 4))) = 0 Then WS(MAIN).Cells(headerRow, 4).Value2 = UI(47)
-    If Len(CellText(WS(MAIN).Cells(headerRow, 7))) = 0 Then WS(MAIN).Cells(headerRow, 7).Value2 = UI(48)
-    If HasList(WS(MAIN).Range("D12")) Then WS(MAIN).Range("D12").MergeArea.Validation.Delete
-    If HasList(WS(MAIN).Range("G12")) Then WS(MAIN).Range("G12").MergeArea.Validation.Delete
+    ' Headings belong to the final design and must never be overwritten.
 End Sub
 
 Private Function IsClientCell(ByVal dest As Range) As Boolean
-    IsClientCell = (dest.row = 9 And (dest.Column = 1 Or dest.Column = 2))
+    IsClientCell = (dest.row = 8 And (dest.Column = 1 Or dest.Column = 2))
 End Function
 
 Private Function CandidateSource(ByVal customer As Boolean) As Worksheet
@@ -294,15 +286,15 @@ End Sub
 
 Private Sub FillNames()
     Dim r As Long, found As Long
-    found = CodeRow(WS(CLIENTS), CStr(WS(MAIN).Range("A9").Value2))
-    If found > 0 Then WS(MAIN).Range("B9").value = WS(CLIENTS).Cells(found, 2).Value2
+    found = CodeRow(WS(CLIENTS), CStr(WS(MAIN).Range("A8").Value2))
+    If found > 0 Then WS(MAIN).Range("B8").value = WS(CLIENTS).Cells(found, 2).Value2
     If HasTopSearch() Then
         found = CodeRow(WS(PRODUCTS), CStr(WS(MAIN).Range("D12").Value2))
         If found > 0 Then WS(MAIN).Range("G12").value = WS(PRODUCTS).Cells(found, 2).Value2
     End If
     For r = FirstItemRow() To LastItemRow()
-        found = CodeRow(WS(PRODUCTS), CStr(WS(MAIN).Cells(r, 5).Value2))
-        If found > 0 Then WS(MAIN).Cells(r, 6).value = WS(PRODUCTS).Cells(found, 2).Value2
+        found = CodeRow(WS(PRODUCTS), CStr(WS(MAIN).Cells(r, 2).Value2))
+        If found > 0 Then WS(MAIN).Cells(r, 3).value = WS(PRODUCTS).Cells(found, 2).Value2
     Next r
 End Sub
 
@@ -311,31 +303,32 @@ Private Sub ApplyChoice(ByVal dest As Range, ByVal sourceRow As Long)
     customer = IsClientCell(dest)
     Set src = CandidateSource(customer)
     If customer Then
-        WS(MAIN).Range("A9").NumberFormat = "@"
-        WS(MAIN).Range("A9").value = CStr(src.Cells(sourceRow, 1).Value2)
-        WS(MAIN).Range("B9").value = src.Cells(sourceRow, 2).Value2
+        WS(MAIN).Range("A8").NumberFormat = "@"
+        WS(MAIN).Range("A8").value = CStr(src.Cells(sourceRow, 1).Value2)
+        WS(MAIN).Range("B8").value = src.Cells(sourceRow, 2).Value2
     ElseIf HasTopSearch() And dest.row = 12 Then
         WS(MAIN).Range("D12").NumberFormat = "@"
         WS(MAIN).Range("D12").value = CStr(src.Cells(sourceRow, 1).Value2)
         WS(MAIN).Range("G12").value = src.Cells(sourceRow, 2).Value2
         For r = FirstItemRow() To LastItemRow()
-            If Len(CStr(WS(MAIN).Cells(r, 5).Value2)) = 0 And Len(CStr(WS(MAIN).Cells(r, 6).Value2)) = 0 Then Exit For
+            If Len(CStr(WS(MAIN).Cells(r, 2).Value2)) = 0 And Len(CStr(WS(MAIN).Cells(r, 3).Value2)) = 0 Then Exit For
         Next r
         If r > LastItemRow() Then
             UnicodeMessage UI(2), vbInformation
         Else
-            WS(MAIN).Cells(r, 5).NumberFormat = "@"
-            WS(MAIN).Cells(r, 5).value = CStr(src.Cells(sourceRow, 1).Value2)
-            WS(MAIN).Cells(r, 6).value = src.Cells(sourceRow, 2).Value2
+            WS(MAIN).Cells(r, 2).NumberFormat = "@"
+            WS(MAIN).Cells(r, 2).value = CStr(src.Cells(sourceRow, 1).Value2)
+            WS(MAIN).Cells(r, 3).value = src.Cells(sourceRow, 2).Value2
             WS(MAIN).Cells(r, 7).Select
         End If
     Else
         r = dest.row
-        WS(MAIN).Cells(r, 5).NumberFormat = "@"
-        WS(MAIN).Cells(r, 5).value = CStr(src.Cells(sourceRow, 1).Value2)
-        WS(MAIN).Cells(r, 6).value = src.Cells(sourceRow, 2).Value2
+        WS(MAIN).Cells(r, 2).NumberFormat = "@"
+        WS(MAIN).Cells(r, 2).value = CStr(src.Cells(sourceRow, 1).Value2)
+        WS(MAIN).Cells(r, 3).value = src.Cells(sourceRow, 2).Value2
         WS(MAIN).Cells(r, 7).Select
     End If
+    BuildList customer, ""
     WS(MAIN).Calculate
 End Sub
 
@@ -344,14 +337,14 @@ Private Sub SearchChanged(ByVal dest As Range)
     Dim p As Long, found As Long, count As Long, c As Long, listName As String
     customer = IsClientCell(dest)
     Set src = CandidateSource(customer)
-    query = Trim$(CStr(dest.Value2))
+    query = CellText(dest)
     If customer Then c = 27: listName = "InlineClients" Else c = 28: listName = "InlineProducts"
     If customer Then
-        If dest.Column = 2 Then WS(MAIN).Range("A9").MergeArea.ClearContents Else WS(MAIN).Range("B9").MergeArea.ClearContents
+        If dest.Column = 2 Then WS(MAIN).Range("A8").MergeArea.ClearContents Else WS(MAIN).Range("B8").MergeArea.ClearContents
     ElseIf HasTopSearch() And dest.row = 12 Then
         If dest.Column = 7 Then WS(MAIN).Range("D12").MergeArea.ClearContents Else WS(MAIN).Range("G12").MergeArea.ClearContents
     Else
-        If dest.Column = 6 Then WS(MAIN).Cells(dest.row, 5).ClearContents Else WS(MAIN).Cells(dest.row, 6).ClearContents
+        If dest.Column = 3 Then WS(MAIN).Cells(dest.row, 2).ClearContents Else WS(MAIN).Cells(dest.row, 3).MergeArea.ClearContents
     End If
     If Len(query) = 0 Then
         BuildList customer, ""
@@ -401,28 +394,55 @@ End Sub
 
 Public Sub SearchProducts()
     If ActiveSheet.Name <> WS(MAIN).Name Then Exit Sub
-    If ActiveCell.row >= FirstItemRow() And ActiveCell.row <= LastItemRow() And (ActiveCell.Column = 5 Or ActiveCell.Column = 6) Then
-        StartSearch WS(MAIN).Cells(ActiveCell.row, 6)
+    If ActiveCell.row >= FirstItemRow() And ActiveCell.row <= LastItemRow() And (ActiveCell.Column = 2 Or ActiveCell.Column = 3) Then
+        StartSearch WS(MAIN).Cells(ActiveCell.row, 3)
     Else
         StartSearch ProductSearchTarget()
     End If
 End Sub
 
 Public Sub SearchClients()
-    If ActiveSheet.Name = WS(MAIN).Name Then StartSearch WS(MAIN).Range("B9")
+    If ActiveSheet.Name = WS(MAIN).Name Then StartSearch WS(MAIN).Range("B8")
 End Sub
 
 Public Sub HandleChange(ByVal Sh As Object, ByVal Target As Range)
     Dim oldEvents As Boolean, dest As Range, firstRow As Long, totalRow As Long
+    Dim changed As Range, cell As Range, found As Long, customer As Boolean, src As Worksheet
+    Dim query As String, splitAt As Long
+    If BusyPrinting Then Exit Sub
     oldEvents = Application.EnableEvents
     On Error GoTo Failed
     Application.EnableEvents = False
     If Sh.Name = WS(MAIN).Name Then
         FormRows firstRow, totalRow
-        If Not Intersect(Target, Sh.Range(Sh.Cells(firstRow, 1), Sh.Cells(totalRow, 13))) Is Nothing Then RefreshTotals firstRow, totalRow
-        Set dest = Target.Cells(1, 1)
-        If Target.CountLarge > 1 And Target.address <> dest.MergeArea.address Then GoTo Done
-        If Not Intersect(dest, SearchInputCells()) Is Nothing Then SearchChanged dest
+        Set dest = Target.Cells(1, 1).MergeArea.Cells(1, 1)
+        Set changed = Intersect(Target, SearchInputCells())
+        If Not changed Is Nothing Then
+            If Target.CountLarge = 1 Or Target.Address = dest.MergeArea.Address Then
+                SearchChanged dest
+            Else
+                For Each cell In changed.Cells
+                    If cell.Address = cell.MergeArea.Cells(1, 1).Address Then
+                        customer = IsClientCell(cell)
+                        Set src = CandidateSource(customer)
+                        query = CellText(cell)
+                        splitAt = InStrRev(query, " | ")
+                        If splitAt > 0 Then query = Mid$(query, splitAt + 3)
+                        If Len(query) = 0 Then
+                            If customer Then
+                                If cell.Column = 1 Then Sh.Range("B8").MergeArea.ClearContents Else Sh.Range("A8").ClearContents
+                            Else
+                                If cell.Column = 2 Then Sh.Cells(cell.Row, 3).MergeArea.ClearContents Else Sh.Cells(cell.Row, 2).ClearContents
+                            End If
+                        Else
+                            found = CodeRow(src, query)
+                            If found > 0 Then ApplyChoice cell, found
+                        End If
+                    End If
+                Next cell
+            End If
+        End If
+        RefreshTotals firstRow, totalRow
     ElseIf Sh.Name = WS(CLIENTS).Name Or Sh.Name = WS(PRODUCTS).Name Then
         FillNames
         BuildList True, ""
@@ -439,18 +459,18 @@ End Sub
 
 Public Sub HandleDoubleClick(ByVal Sh As Object, ByVal Target As Range, ByRef Cancel As Boolean)
     If Sh.Name = WS(MAIN).Name Then
-        If Not Intersect(Target, Sh.Range("M7")) Is Nothing Then
+        If Not Intersect(Target, Sh.Range("L6").MergeArea) Is Nothing Then
             Cancel = True
             ArchiveAndPrint
-        ElseIf Not Intersect(Target, Sh.Range("A9:D10")) Is Nothing Then
+        ElseIf Not Intersect(Target, Sh.Range("A8:D8")) Is Nothing Then
             Cancel = True
             SearchClients
         ElseIf HasTopSearch() And Not Intersect(Target, Sh.Range("A12:M12")) Is Nothing Then
             Cancel = True
             StartSearch ProductSearchTarget()
-        ElseIf Not Intersect(Target, ItemCells(5, 6)) Is Nothing Then
+        ElseIf Not Intersect(Target, ItemCells(2, 3)) Is Nothing Then
             Cancel = True
-            StartSearch WS(MAIN).Cells(Target.row, 6)
+            StartSearch WS(MAIN).Cells(Target.row, 3)
         End If
     ElseIf IsSavedReceiptSheet(Sh.Name) Then
         If Not Intersect(Target, Sh.Range("J11:K11")) Is Nothing Then
@@ -468,29 +488,34 @@ End Sub
 Public Sub Initialize()
     Dim oldEvents As Boolean, r As Long, firstRow As Long, totalRow As Long
     oldEvents = Application.EnableEvents
-    On Error GoTo Done
+    On Error GoTo Failed
     Application.EnableEvents = False
+    ThisWorkbook.Names.Add Name:="ReturnReasons", RefersTo:="='" & Replace(WS(SETTINGS).Name, "'", "''") & "'!$A$2:$A$7"
     FormRows firstRow, totalRow
     RepairTableHeadings firstRow
     RefreshTotals firstRow, totalRow
     WS(SETTINGS).Range("D1").value = NextNumber()
-    WS(MAIN).Range("L9").Formula = "=""#""&'" & Replace(WS(SETTINGS).Name, "'", "''") & "'!$D$1"
+    WS(MAIN).Range("L8").Formula = "=""#""&'" & Replace(WS(SETTINGS).Name, "'", "''") & "'!$D$1"
     FillNames
     BuildList True, ""
     BuildList False, ""
-    SetList WS(MAIN).Range("A9"), "InlineClients"
-    SetList WS(MAIN).Range("B9"), "InlineClients"
+    SetList WS(MAIN).Range("A8"), "InlineClients"
+    SetList WS(MAIN).Range("B8"), "InlineClients"
     If HasTopSearch() Then
         SetList WS(MAIN).Range("D12"), "InlineProducts"
         SetList WS(MAIN).Range("G12"), "InlineProducts"
     End If
     For r = FirstItemRow() To LastItemRow()
-        SetList WS(MAIN).Cells(r, 5), "InlineProducts"
-        SetList WS(MAIN).Cells(r, 6), "InlineProducts"
+        SetList WS(MAIN).Cells(r, 2), "InlineProducts"
+        SetList WS(MAIN).Cells(r, 3), "InlineProducts"
     Next r
     WS(MAIN).Calculate
 Done:
     Application.EnableEvents = oldEvents
+    Exit Sub
+Failed:
+    UnicodeMessage UI(6) & vbCrLf & Err.Description, vbExclamation
+    Resume Done
 End Sub
 
 Private Function NextNumber() As Long
@@ -522,15 +547,25 @@ End Function
 Private Function ValidForm() As Boolean
     Dim r As Long, c As Long, firstRow As Long, totalRow As Long
     Dim quantity As Double, entries As Long, code As String, value As String
-    code = CellText(WS(MAIN).Range("A9"))
+    code = CellText(WS(MAIN).Range("A8"))
     If Len(code) = 0 Then UnicodeMessage UI(10), vbExclamation: Exit Function
     If CodeRow(WS(CLIENTS), code) <= 0 Then UnicodeMessage UI(8), vbExclamation: Exit Function
+    If Len(CellText(WS(MAIN).Range("F6"))) > 0 Then
+        If Not IsNumeric(WS(MAIN).Range("F6").Value2) Then UnicodeMessage UI(58), vbExclamation: Exit Function
+        If CDbl(WS(MAIN).Range("F6").Value2) <= 0 Or CDbl(WS(MAIN).Range("F6").Value2) > CDbl(Date) Then UnicodeMessage UI(58), vbExclamation: Exit Function
+    End If
     FormRows firstRow, totalRow
     For r = firstRow To totalRow - 1
         If RowHasData(r) Then
-            code = CellText(WS(MAIN).Cells(r, 5))
+            code = CellText(WS(MAIN).Cells(r, 2))
             If Len(code) = 0 Then UnicodeMessage UI(11) & " " & r, vbExclamation: Exit Function
             If CodeRow(WS(PRODUCTS), code) <= 0 Then UnicodeMessage UI(11) & " " & r, vbExclamation: Exit Function
+            If Not IsNumeric(WS(MAIN).Cells(r, 10).Value2) Or Len(CellText(WS(MAIN).Cells(r, 10))) = 0 Then
+                UnicodeMessage UI(57) & " " & r, vbExclamation: Exit Function
+            End If
+            If CDbl(WS(MAIN).Cells(r, 10).Value2) <= 0 Or CDbl(WS(MAIN).Cells(r, 10).Value2) > CDbl(Date) Then
+                UnicodeMessage UI(57) & " " & r, vbExclamation: Exit Function
+            End If
             entries = entries + 1
             quantity = 0
             For c = 7 To 9
@@ -610,9 +645,9 @@ Private Sub PrepareReceiptCopy(ByVal number As Long, ByVal totalRow As Long, ByR
     receipt.Range(address).Copy
     receipt.Range(address).PasteSpecial xlPasteValues
     Application.CutCopyMode = False
-    receipt.Range("I7").value = Now
-    receipt.Range("L9").value = "#" & CStr(number)
-    receipt.Range("M7").ClearContents
+    receipt.Range("I6").value = Now
+    receipt.Range("L8").value = "#" & CStr(number)
+    receipt.Range("L6").MergeArea.ClearContents
     receipt.Range("AA:AB").ClearContents
     receipt.Range(address).Validation.Delete
     For i = receipt.Shapes.count To 1 Step -1
@@ -627,13 +662,22 @@ Private Sub ExportReceiptPDF(ByVal receipt As Worksheet, ByVal path As String)
     If CreateObject("Scripting.FileSystemObject").GetFile(path).Size = 0 Then Err.Raise vbObjectError + 921, "ExportReceiptPDF", UI(56)
 End Sub
 
+Private Sub RestoreCells(ByVal target As Range, ByVal saved As Variant)
+    Dim cell As Range
+    For Each cell In target.Cells
+        If cell.Address = cell.MergeArea.Cells(1, 1).Address Then
+            cell.Formula = saved(cell.Row - target.Row + 1, cell.Column - target.Column + 1)
+        End If
+    Next cell
+End Sub
+
 Public Sub ArchiveAndPrint()
     Dim form As Worksheet, log As Worksheet, receipt As Worksheet, temporary As Workbook
     Dim firstRow As Long, totalRow As Long, number As Long, logRow As Long
     Dim pdfPath As String, relativeName As String, paper As Boolean, errorText As String, paperError As String
     Dim oldEvents As Boolean, oldScreen As Boolean, oldCounter As Variant
     Dim itemBackup As Variant, noteBackup As Variant, clientCode As Variant, clientName As Variant, topCode As Variant, topName As Variant
-    Dim outputChoice As Long
+    Dim outputChoice As Long, returnBackup As Variant, invoiceBackup As Variant
     Dim backupReady As Boolean, resetStarted As Boolean, pdfSaved As Boolean, committed As Boolean
     If BusyPrinting Then Exit Sub
     oldEvents = Application.EnableEvents
@@ -651,7 +695,7 @@ Public Sub ArchiveAndPrint()
     If outputChoice = vbCancel Then Exit Sub
     paper = (outputChoice = vbYes)
     If paper Then
-        If Not Application.Dialogs(xlDialogPrinterSetup).Show Then Exit Sub
+        If Not Application.Dialogs(xlDialogPrinterSetup).show Then Exit Sub
         paper = Not PDFPrinterSelected()
     End If
     number = NextNumber()
@@ -665,12 +709,14 @@ Public Sub ArchiveAndPrint()
     oldCounter = WS(SETTINGS).Range("D1").Value2
     itemBackup = form.Range(form.Cells(firstRow, 2), form.Cells(totalRow - 1, 10)).Formula
     noteBackup = form.Range(form.Cells(firstRow, 12), form.Cells(totalRow - 1, 13)).Formula
-    clientCode = form.Range("A9").Formula
-    clientName = form.Range("B9").Formula
+    clientCode = form.Range("A8").Formula
+    clientName = form.Range("B8").Formula
     If HasTopSearch() Then
         topCode = form.Range("D12").Formula
         topName = form.Range("G12").Formula
     End If
+    returnBackup = form.Range("D6").Formula
+    invoiceBackup = form.Range("F6").Formula
     backupReady = True
     BusyPrinting = True
     Application.EnableEvents = False
@@ -686,23 +732,25 @@ Public Sub ArchiveAndPrint()
     log.Cells(logRow, 2).value = Now
     log.Cells(logRow, 2).NumberFormat = "yyyy-mm-dd hh:mm"
     log.Cells(logRow, 3).NumberFormat = "@"
-    log.Cells(logRow, 3).Value2 = CStr(form.Range("A9").Value2)
-    log.Cells(logRow, 4).Value2 = form.Range("B9").Value2
-    log.Cells(logRow, 5).Value2 = form.Range("J9").Value2
+    log.Cells(logRow, 3).Value2 = CStr(form.Range("A8").Value2)
+    log.Cells(logRow, 4).Value2 = form.Range("B8").Value2
+    log.Cells(logRow, 5).Value2 = form.Range("J8").Value2
     log.Cells(logRow, 6).Value2 = form.Cells(totalRow, 7).Value2
     log.Cells(logRow, 7).Value2 = form.Cells(totalRow, 8).Value2
     log.Cells(logRow, 8).Value2 = form.Cells(totalRow, 9).Value2
     log.Cells(logRow, 9).Value2 = UI(42)
     log.Hyperlinks.Add Anchor:=log.Cells(logRow, 10), address:=relativeName, TextToDisplay:=relativeName
     resetStarted = True
-    form.Range("A9").MergeArea.ClearContents
-    form.Range("B9").MergeArea.ClearContents
+    form.Range("A8").MergeArea.ClearContents
+    form.Range("B8").MergeArea.ClearContents
     If HasTopSearch() Then
         form.Range("D12").MergeArea.ClearContents
         form.Range("G12").MergeArea.ClearContents
     End If
     form.Range(form.Cells(firstRow, 2), form.Cells(totalRow - 1, 10)).ClearContents
     form.Range(form.Cells(firstRow, 12), form.Cells(totalRow - 1, 13)).ClearContents
+    form.Range("D6").ClearContents
+    form.Range("F6").ClearContents
     WS(SETTINGS).Range("D1").Value2 = number + 1
     BuildList True, ""
     BuildList False, ""
@@ -737,10 +785,12 @@ Failed:
     On Error Resume Next
     If Not committed And backupReady Then
         If resetStarted Then
-            form.Range(form.Cells(firstRow, 2), form.Cells(totalRow - 1, 10)).Formula = itemBackup
-            form.Range(form.Cells(firstRow, 12), form.Cells(totalRow - 1, 13)).Formula = noteBackup
-            form.Range("A9").Formula = clientCode
-            form.Range("B9").Formula = clientName
+            RestoreCells form.Range(form.Cells(firstRow, 2), form.Cells(totalRow - 1, 10)), itemBackup
+            RestoreCells form.Range(form.Cells(firstRow, 12), form.Cells(totalRow - 1, 13)), noteBackup
+            form.Range("D6").Formula = returnBackup
+            form.Range("F6").Formula = invoiceBackup
+            form.Range("A8").Formula = clientCode
+            form.Range("B8").Formula = clientName
             If HasTopSearch() Then
                 form.Range("D12").Formula = topCode
                 form.Range("G12").Formula = topName
