@@ -384,7 +384,7 @@ Private Sub RefreshTotals(ByVal firstRow As Long, ByVal totalRow As Long)
         WS(MAIN).Cells(totalRow, c).Formula = "=SUM(" & WS(MAIN).Range(WS(MAIN).Cells(firstRow, c), WS(MAIN).Cells(totalRow - 1, c)).address(False, False) & ")"
     Next c
     WS(MAIN).Range("J8").Formula = "=SUMPRODUCT(--(" & WS(MAIN).Range(WS(MAIN).Cells(firstRow, 2), WS(MAIN).Cells(totalRow - 1, 2)).address(False, False) & "<>""""))"
-    WS(MAIN).PageSetup.PrintArea = WS(MAIN).Range("A1:M" & totalRow).address
+    WS(MAIN).PageSetup.PrintArea = WS(MAIN).Range("A1:M36").address
     WS(MAIN).Calculate
 End Sub
 
@@ -828,7 +828,7 @@ End Sub
 
 Private Sub PrepareReceiptCopy(ByVal number As Long, ByVal totalRow As Long, ByRef temporary As Workbook, ByRef receipt As Worksheet)
     Dim address As String, i As Long
-    address = "A1:M" & totalRow
+    address = "A1:M36"
     WS(MAIN).Calculate
     WS(MAIN).Copy
     Set temporary = Application.ActiveWorkbook
