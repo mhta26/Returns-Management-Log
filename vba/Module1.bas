@@ -47,7 +47,7 @@ Private Function DecodeText(ByVal encoded As String) As String
 End Function
 
 Private Function UI(ByVal n As Long) As String
-    UI = CStr(WS(SETTINGS).Cells(n, 8).Value)
+    UI = CStr(WS(SETTINGS).Cells(n, 8).value)
     If Len(UI) > 0 Then Exit Function
     Select Case n
     Case 2
@@ -734,7 +734,7 @@ Private Function NextNumber() As Long
         End If
     Next Sh
     Set log = ThisWorkbook.Worksheets("Archive")
-    For row = 4 To LastRow(log, 10)
+    For row = 5 To LastRow(log, 12)
         If IsNumeric(log.Cells(row, 1).Value2) Then
             If CDbl(log.Cells(row, 1).Value2) >= n Then n = CLng(log.Cells(row, 1).Value2) + 1
         End If
@@ -876,8 +876,8 @@ Private Sub RemoveUncommittedReceipt(ByVal saved As Worksheet)
 End Sub
 
 Private Sub KeepReceipt(ByVal receipt As Worksheet, ByVal number As Long, ByRef saved As Worksheet)
-    receipt.Copy After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count)
-    Set saved = ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.Count)
+    receipt.Copy After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.count)
+    Set saved = ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.count)
     saved.Name = "RET_" & Format$(number, "000000")
     saved.Protect DrawingObjects:=True, Contents:=True, Scenarios:=True
 End Sub
@@ -911,7 +911,7 @@ Public Sub ArchiveAndPrint()
         UnicodeMessage UI(61), vbExclamation
     Loop
     copyCount = CLng(copiesRequested)
-    If Not Application.Dialogs(xlDialogPrinterSetup).Show Then Exit Sub
+    If Not Application.Dialogs(xlDialogPrinterSetup).show Then Exit Sub
     paper = True
     number = NextNumber()
     Do While FileExists(pdfPath & ReceiptFileName(number))
@@ -942,10 +942,10 @@ Public Sub ArchiveAndPrint()
     ExportReceiptPDF receipt, pdfPath
     pdfSaved = True
     KeepReceipt receipt, number, saved
-    logRow = LastRow(log, 10) + 1
-    If logRow < 4 Then logRow = 4
+    logRow = LastRow(log, 12) + 1
+    If logRow < 5 Then logRow = 5
     log.Cells(logRow, 1).Value2 = number
-    log.Hyperlinks.Add Anchor:=log.Cells(logRow, 1), Address:="", SubAddress:="'" & saved.Name & "'!A1", TextToDisplay:=CStr(number)
+    log.Hyperlinks.Add Anchor:=log.Cells(logRow, 1), address:="", SubAddress:="'" & saved.Name & "'!A1", TextToDisplay:=CStr(number)
     log.Cells(logRow, 2).value = Now
     log.Cells(logRow, 2).NumberFormat = "yyyy-mm-dd hh:mm"
     log.Cells(logRow, 3).NumberFormat = "@"
@@ -955,6 +955,10 @@ Public Sub ArchiveAndPrint()
     log.Cells(logRow, 6).Value2 = form.Cells(totalRow, 7).Value2
     log.Cells(logRow, 7).Value2 = form.Cells(totalRow, 8).Value2
     log.Cells(logRow, 8).Value2 = form.Cells(totalRow, 9).Value2
+    log.Cells(logRow, 11).NumberFormat = "@"
+    log.Cells(logRow, 11).Value2 = CStr(form.Range("D6").Value2)
+    log.Cells(logRow, 12).NumberFormat = "yyyy-mm-dd"
+    If Len(CellText(form.Range("F6"))) > 0 Then log.Cells(logRow, 12).Value2 = form.Range("F6").Value2
     log.Cells(logRow, 9).Value2 = UI(42)
     log.Hyperlinks.Add Anchor:=log.Cells(logRow, 10), address:=relativeName, TextToDisplay:=relativeName
     resetStarted = True
@@ -977,7 +981,7 @@ Public Sub ArchiveAndPrint()
     committed = True
     If paper Then
         On Error Resume Next
-        receipt.PrintOut Copies:=copyCount, Collate:=True
+        receipt.PrintOut copies:=copyCount, Collate:=True
         If Err.number <> 0 Then paperError = Err.Description
         Err.Clear
         On Error GoTo Failed
@@ -1013,7 +1017,7 @@ Failed:
             End If
         End If
         WS(SETTINGS).Range("D1").Value2 = oldCounter
-        If logRow >= 4 Then log.Range(log.Cells(logRow, 1), log.Cells(logRow, 10)).Clear
+        If logRow >= 5 Then log.Range(log.Cells(logRow, 1), log.Cells(logRow, 12)).Clear
         form.Calculate
     End If
     CloseReceiptCopy temporary
@@ -1038,7 +1042,7 @@ Private Sub OpenLogPDF(ByVal row As Long, Optional ByVal legacyName As String = 
     oldBusy = BusyPrinting
     On Error GoTo Failed
     Set log = ThisWorkbook.Worksheets("Archive")
-    If row < 4 Then Err.Raise vbObjectError + 922, "OpenLogPDF", UI(54)
+    If row < 5 Then Err.Raise vbObjectError + 922, "OpenLogPDF", UI(54)
     number = CLng(log.Cells(row, 1).Value2)
     If log.Cells(row, 10).Hyperlinks.count > 0 Then address = log.Cells(row, 10).Hyperlinks(1).address
     If Len(address) > 0 Then
@@ -1076,7 +1080,7 @@ End Sub
 Public Sub ReprintArchive()
     Dim log As Worksheet
     Set log = ThisWorkbook.Worksheets("Archive")
-    If ActiveSheet.Name <> log.Name Or ActiveCell.row < 4 Then UnicodeMessage UI(25), vbInformation: Exit Sub
+    If ActiveSheet.Name <> log.Name Or ActiveCell.row < 5 Then UnicodeMessage UI(25), vbInformation: Exit Sub
     OpenLogPDF ActiveCell.row
 End Sub
 
@@ -1086,7 +1090,7 @@ Public Sub ReprintSavedSheet(ByVal sheetName As String)
     previousBusy = BusyPrinting
     On Error GoTo Failed
     Do
-        requested = Application.InputBox(Prompt:=UI(59), Title:=UI(60), Default:=1, Type:=1)
+        requested = Application.InputBox(prompt:=UI(59), title:=UI(60), Default:=1, Type:=1)
         If VarType(requested) = vbBoolean Then Exit Sub
         If requested >= 1 And requested <= 999 Then
             If requested = Fix(requested) Then Exit Do
@@ -1094,9 +1098,9 @@ Public Sub ReprintSavedSheet(ByVal sheetName As String)
         UnicodeMessage UI(61), vbExclamation
     Loop
     copies = CLng(requested)
-    If Not Application.Dialogs(xlDialogPrinterSetup).Show Then Exit Sub
+    If Not Application.Dialogs(xlDialogPrinterSetup).show Then Exit Sub
     BusyPrinting = True
-    ThisWorkbook.Worksheets(sheetName).PrintOut Copies:=copies, Collate:=True
+    ThisWorkbook.Worksheets(sheetName).PrintOut copies:=copies, Collate:=True
     BusyPrinting = previousBusy
     Exit Sub
 Failed:
