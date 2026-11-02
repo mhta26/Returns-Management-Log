@@ -709,6 +709,7 @@ Public Sub ArchiveAndPrint()
         UnicodeMessage UI(61), vbExclamation
     Loop
     copyCount = CLng(copiesRequested)
+    If Not Application.Dialogs(xlDialogPrinterSetup).Show Then Exit Sub
     paper = True
     number = NextNumber()
     Do While FileExists(pdfPath & ReceiptFileName(number))
