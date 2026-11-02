@@ -162,6 +162,18 @@ Private Function HasList(ByVal cell As Range) As Boolean
     On Error GoTo 0
 End Function
 
+Private Sub ColorStatuses(ByVal firstRow As Long, ByVal totalRow As Long)
+    Dim target As Range, rule As FormatCondition, i As Long, colors As Variant
+    Set target = WS(MAIN).Range(WS(MAIN).Cells(firstRow, 11), WS(MAIN).Cells(totalRow - 1, 11))
+    colors = Array(RGB(255, 199, 206), RGB(248, 203, 173), RGB(255, 235, 156), RGB(198, 239, 206))
+    target.FormatConditions.Delete
+    For i = 0 To 3
+        Set rule = target.FormatConditions.Add(Type:=xlCellValue, Operator:=xlEqual, Formula1:="=" & Chr$(34) & UI(62 + i) & Chr$(34))
+        rule.Interior.Color = colors(i)
+        rule.Font.Color = RGB(0, 0, 0)
+    Next i
+End Sub
+
 Private Sub EnsureItemRows(ByVal firstRow As Long, ByVal totalRow As Long)
     Dim r As Long
     For r = firstRow To totalRow - 1
@@ -176,6 +188,7 @@ Private Sub EnsureItemRows(ByVal firstRow As Long, ByVal totalRow As Long)
             .ShowError = True
         End With
     Next r
+    ColorStatuses firstRow, totalRow
 End Sub
 
 Private Sub RefreshTotals(ByVal firstRow As Long, ByVal totalRow As Long)
@@ -405,7 +418,7 @@ Public Sub SearchClients()
     If ActiveSheet.Name = WS(MAIN).Name Then StartSearch WS(MAIN).Range("B8")
 End Sub
 
-Public Sub HandleChange(ByVal Sh As Object, ByVal Target As Range)
+Public Sub HandleChange(ByVal Sh As Object, ByVal target As Range)
     Dim oldEvents As Boolean, dest As Range, firstRow As Long, totalRow As Long
     Dim changed As Range, cell As Range, found As Long, customer As Boolean, src As Worksheet
     Dim query As String, splitAt As Long
@@ -415,14 +428,14 @@ Public Sub HandleChange(ByVal Sh As Object, ByVal Target As Range)
     Application.EnableEvents = False
     If Sh.Name = WS(MAIN).Name Then
         FormRows firstRow, totalRow
-        Set dest = Target.Cells(1, 1).MergeArea.Cells(1, 1)
-        Set changed = Intersect(Target, SearchInputCells())
+        Set dest = target.Cells(1, 1).MergeArea.Cells(1, 1)
+        Set changed = Intersect(target, SearchInputCells())
         If Not changed Is Nothing Then
-            If Target.CountLarge = 1 Or Target.Address = dest.MergeArea.Address Then
+            If target.CountLarge = 1 Or target.address = dest.MergeArea.address Then
                 SearchChanged dest
             Else
                 For Each cell In changed.Cells
-                    If cell.Address = cell.MergeArea.Cells(1, 1).Address Then
+                    If cell.address = cell.MergeArea.Cells(1, 1).address Then
                         customer = IsClientCell(cell)
                         Set src = CandidateSource(customer)
                         query = CellText(cell)
@@ -432,7 +445,7 @@ Public Sub HandleChange(ByVal Sh As Object, ByVal Target As Range)
                             If customer Then
                                 If cell.Column = 1 Then Sh.Range("B8").MergeArea.ClearContents Else Sh.Range("A8").ClearContents
                             Else
-                                If cell.Column = 2 Then Sh.Cells(cell.Row, 3).MergeArea.ClearContents Else Sh.Cells(cell.Row, 2).ClearContents
+                                If cell.Column = 2 Then Sh.Cells(cell.row, 3).MergeArea.ClearContents Else Sh.Cells(cell.row, 2).ClearContents
                             End If
                         Else
                             found = CodeRow(src, query)
@@ -457,28 +470,28 @@ Failed:
     Resume Done
 End Sub
 
-Public Sub HandleDoubleClick(ByVal Sh As Object, ByVal Target As Range, ByRef Cancel As Boolean)
+Public Sub HandleDoubleClick(ByVal Sh As Object, ByVal target As Range, ByRef Cancel As Boolean)
     If Sh.Name = WS(MAIN).Name Then
-        If Not Intersect(Target, Sh.Range("L6").MergeArea) Is Nothing Then
+        If Not Intersect(target, Sh.Range("L6").MergeArea) Is Nothing Then
             Cancel = True
             ArchiveAndPrint
-        ElseIf Not Intersect(Target, Sh.Range("A8:D8")) Is Nothing Then
+        ElseIf Not Intersect(target, Sh.Range("A8:D8")) Is Nothing Then
             Cancel = True
             SearchClients
-        ElseIf HasTopSearch() And Not Intersect(Target, Sh.Range("A12:M12")) Is Nothing Then
+        ElseIf HasTopSearch() And Not Intersect(target, Sh.Range("A12:M12")) Is Nothing Then
             Cancel = True
             StartSearch ProductSearchTarget()
-        ElseIf Not Intersect(Target, ItemCells(2, 3)) Is Nothing Then
+        ElseIf Not Intersect(target, ItemCells(2, 3)) Is Nothing Then
             Cancel = True
-            StartSearch WS(MAIN).Cells(Target.row, 3)
+            StartSearch WS(MAIN).Cells(target.row, 3)
         End If
     ElseIf IsSavedReceiptSheet(Sh.Name) Then
-        If Not Intersect(Target, Sh.Range("J11:K11")) Is Nothing Then
+        If Not Intersect(target, Sh.Range("J11:K11")) Is Nothing Then
             Cancel = True
             ReprintSavedSheet Sh.Name
         End If
     ElseIf Sh.Name = "Archive" Then
-        If Target.row >= 4 And Target.Column = 9 Then
+        If target.row >= 4 And target.Column = 9 Then
             Cancel = True
             ReprintArchive
         End If
@@ -603,10 +616,6 @@ Private Function ReceiptFileName(ByVal number As Long) As String
     ReceiptFileName = baseName & " - " & CStr(number) & ".pdf"
 End Function
 
-Private Function PDFPrinterSelected() As Boolean
-    PDFPrinterSelected = (InStr(1, Application.ActivePrinter, "PDF", vbTextCompare) > 0)
-End Function
-
 Private Function FolderPath() As String
     If Len(ThisWorkbook.path) = 0 Or InStr(1, ThisWorkbook.path, "://", vbTextCompare) > 0 Then Err.Raise vbObjectError + 920, "FolderPath", UI(49)
     FolderPath = ThisWorkbook.path
@@ -665,8 +674,8 @@ End Sub
 Private Sub RestoreCells(ByVal target As Range, ByVal saved As Variant)
     Dim cell As Range
     For Each cell In target.Cells
-        If cell.Address = cell.MergeArea.Cells(1, 1).Address Then
-            cell.Formula = saved(cell.Row - target.Row + 1, cell.Column - target.Column + 1)
+        If cell.address = cell.MergeArea.Cells(1, 1).address Then
+            cell.Formula = saved(cell.row - target.row + 1, cell.Column - target.Column + 1)
         End If
     Next cell
 End Sub
@@ -677,7 +686,7 @@ Public Sub ArchiveAndPrint()
     Dim pdfPath As String, relativeName As String, paper As Boolean, errorText As String, paperError As String
     Dim oldEvents As Boolean, oldScreen As Boolean, oldCounter As Variant
     Dim itemBackup As Variant, noteBackup As Variant, clientCode As Variant, clientName As Variant, topCode As Variant, topName As Variant
-    Dim outputChoice As Long, returnBackup As Variant, invoiceBackup As Variant
+    Dim copiesRequested As Variant, copyCount As Long, returnBackup As Variant, invoiceBackup As Variant
     Dim backupReady As Boolean, resetStarted As Boolean, pdfSaved As Boolean, committed As Boolean
     If BusyPrinting Then Exit Sub
     oldEvents = Application.EnableEvents
@@ -691,13 +700,16 @@ Public Sub ArchiveAndPrint()
     RepairTableHeadings firstRow
     RefreshTotals firstRow, totalRow
     If Not ValidForm() Then Exit Sub
-    outputChoice = UnicodeMessage(UI(16), vbYesNoCancel + vbQuestion + vbDefaultButton2)
-    If outputChoice = vbCancel Then Exit Sub
-    paper = (outputChoice = vbYes)
-    If paper Then
-        If Not Application.Dialogs(xlDialogPrinterSetup).show Then Exit Sub
-        paper = Not PDFPrinterSelected()
-    End If
+    Do
+        copiesRequested = Application.InputBox(Prompt:=UI(59), Title:=UI(60), Default:=1, Type:=1)
+        If VarType(copiesRequested) = vbBoolean Then Exit Sub
+        If copiesRequested >= 1 And copiesRequested <= 999 Then
+            If copiesRequested = Fix(copiesRequested) Then Exit Do
+        End If
+        UnicodeMessage UI(61), vbExclamation
+    Loop
+    copyCount = CLng(copiesRequested)
+    paper = True
     number = NextNumber()
     Do While FileExists(pdfPath & ReceiptFileName(number))
         number = number + 1
@@ -760,7 +772,7 @@ Public Sub ArchiveAndPrint()
     committed = True
     If paper Then
         On Error Resume Next
-        receipt.PrintOut Copies:=1
+        receipt.PrintOut Copies:=copyCount, Collate:=True
         If Err.number <> 0 Then paperError = Err.Description
         Err.Clear
         On Error GoTo Failed
@@ -776,8 +788,6 @@ Public Sub ArchiveAndPrint()
     form.Activate
     If Len(paperError) > 0 Then
         UnicodeMessage UI(46) & vbCrLf & pdfPath & vbCrLf & paperError & vbCrLf & UI(20), vbExclamation
-    Else
-        UnicodeMessage UI(51) & vbCrLf & pdfPath & vbCrLf & UI(20), vbInformation
     End If
     Exit Sub
 Failed:
