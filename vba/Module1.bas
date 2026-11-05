@@ -51,6 +51,14 @@ Private Type LiveRectangle
     right As Long
     bottom As Long
 End Type
+Private Type LiveMonitor
+    cbSize As Long
+    bounds As LiveRectangle
+    work As LiveRectangle
+    flags As Long
+End Type
+Private Declare PtrSafe Function LiveMonitorFromWindow Lib "user32" Alias "MonitorFromWindow" (ByVal hwnd As LongPtr, ByVal flags As Long) As LongPtr
+Private Declare PtrSafe Function LiveMonitorInfo Lib "user32" Alias "GetMonitorInfoW" (ByVal monitor As LongPtr, ByRef info As LiveMonitor) As Long
 Private Declare PtrSafe Function LiveRegister Lib "user32" Alias "RegisterClassExW" (ByRef value As LiveWindowClass) As Integer
 Private Declare PtrSafe Function LiveUnregister Lib "user32" Alias "UnregisterClassW" (ByVal name As LongPtr, ByVal instance As LongPtr) As Long
 Private Declare PtrSafe Function LiveCreate Lib "user32" Alias "CreateWindowExW" (ByVal extended As Long, ByVal classPtr As LongPtr, ByVal title As LongPtr, ByVal style As Long, ByVal x As Long, ByVal y As Long, ByVal width As Long, ByVal height As Long, ByVal parent As LongPtr, ByVal menu As LongPtr, ByVal instance As LongPtr, ByVal parameter As LongPtr) As LongPtr
@@ -478,9 +486,30 @@ Failed:
     LiveFinished = True
 End Function
 
-Private Function LiveLookup(ByVal customer As Boolean, ByVal seed As String) As Long
+Private Sub LivePosition(ByVal anchor As Range, ByVal parentWindow As LongPtr, ByRef popupLeft As Long, ByRef popupTop As Long)
+    Dim x1 As Long, x2 As Long, cellTop As Long, info As LiveMonitor
+    x1 = ActiveWindow.PointsToScreenPixelsX(anchor.Left)
+    x2 = ActiveWindow.PointsToScreenPixelsX(anchor.Left + anchor.Width)
+    cellTop = ActiveWindow.PointsToScreenPixelsY(anchor.Top)
+    popupTop = ActiveWindow.PointsToScreenPixelsY(anchor.Top + anchor.Height) + 2
+    If anchor.Worksheet.DisplayRightToLeft Then
+        If x1 > x2 Then popupLeft = x1 - 440 Else popupLeft = x2 - 440
+    Else
+        If x1 < x2 Then popupLeft = x1 Else popupLeft = x2
+    End If
+    info.cbSize = LenB(info)
+    If LiveMonitorInfo(LiveMonitorFromWindow(parentWindow, 2), info) <> 0 Then
+        If popupLeft + 440 > info.work.right Then popupLeft = info.work.right - 440
+        If popupLeft < info.work.left Then popupLeft = info.work.left
+        If popupTop + 300 > info.work.bottom Then popupTop = cellTop - 302
+        If popupTop < info.work.top Then popupTop = info.work.top
+    End If
+End Sub
+
+Private Function LiveLookup(ByVal customer As Boolean, ByVal seed As String, ByVal anchor As Range) As Long
     Dim wc As LiveWindowClass, message As LiveMessage, rectangle As LiveRectangle, instance As LongPtr
     Dim className As String, title As String, i As Long, source As Worksheet, registered As Boolean, disabled As Boolean
+    Dim popupLeft As Long, popupTop As Long
     Dim button As LongPtr, parentWindow As LongPtr, errorNumber As Long, errorText As String, status As Long
     On Error GoTo Failed
     parentWindow = Application.hwnd
@@ -506,15 +535,15 @@ Private Function LiveLookup(ByVal customer As Boolean, ByVal seed As String) As 
     wc.className = StrPtr(className)
     If LiveRegister(wc) = 0 Then Err.Raise vbObjectError + 952, "LiveLookup", "Cannot register search window."
     registered = True
-    LiveRectangleOf parentWindow, rectangle
+    LivePosition anchor, parentWindow, popupLeft, popupTop
     If customer Then title = UI(71) Else title = UI(72)
-    LiveWindow = LiveCreate(&H400000, StrPtr(className), StrPtr(title), &H10CA0000, rectangle.left + 100, rectangle.top + 100, 650, 430, parentWindow, 0, instance, 0)
+    LiveWindow = LiveCreate(&H400000, StrPtr(className), StrPtr(title), &H10CA0000, popupLeft, popupTop, 440, 300, parentWindow, 0, instance, 0)
     If LiveWindow = 0 Then Err.Raise vbObjectError + 953, "LiveLookup", "Cannot create search window."
-    LiveEdit = LiveControl("EDIT", "", &H50810080, 15, 15, 600, 30, 1001)
-    LiveList = LiveControl("LISTBOX", "", &H50A10101, 15, 55, 600, 265, 1002)
-    LiveCount = LiveControl("STATIC", "", &H50000000, 15, 335, 100, 25, 1005)
-    button = LiveControl("BUTTON", UI(73), &H50010001, 375, 335, 115, 30, 1003)
-    button = LiveControl("BUTTON", UI(74), &H50010000, 500, 335, 115, 30, 1004)
+    LiveEdit = LiveControl("EDIT", "", &H50810080, 10, 10, 400, 26, 1001)
+    LiveList = LiveControl("LISTBOX", "", &H50A10101, 10, 46, 400, 170, 1002)
+    LiveCount = LiveControl("STATIC", "", &H50000000, 10, 228, 80, 22, 1005)
+    button = LiveControl("BUTTON", UI(73), &H50010001, 220, 226, 90, 26, 1003)
+    button = LiveControl("BUTTON", UI(74), &H50010000, 320, 226, 90, 26, 1004)
     LiveEnable parentWindow, 0
     disabled = True
     LiveWriteText LiveEdit, StrPtr(seed)
@@ -957,13 +986,14 @@ Private Sub SearchChanged(ByVal dest As Range)
 End Sub
 
 Private Sub StartSearch(ByVal dest As Range)
-    Dim oldEvents As Boolean, customer As Boolean, selected As Long
+    Dim oldEvents As Boolean, customer As Boolean, selected As Long, anchor As Range
     oldEvents = Application.EnableEvents
     On Error GoTo Failed
     Application.EnableEvents = False
     customer = IsClientCell(dest)
     dest.Select
-    selected = LiveLookup(customer, CellText(dest))
+    If customer Then Set anchor = WS(MAIN).Range("A8") Else Set anchor = WS(MAIN).Cells(dest.Row, 2)
+    selected = LiveLookup(customer, CellText(dest), anchor)
     If selected > 0 Then
         If CodeRow(CandidateSource(customer), CStr(CandidateSource(customer).Cells(selected, 1).Value2)) <> selected Then
             UnicodeMessage UI(8), vbExclamation
@@ -1053,6 +1083,25 @@ Public Sub HandleChange(ByVal Sh As Object, ByVal target As Range)
             End If
         End If
         RefreshTotals firstRow, totalRow
+        If target.CountLarge = 1 And dest.Row >= firstRow And dest.Row < totalRow Then
+            If dest.Column >= 7 And dest.Column <= 9 Then
+                If Len(CellText(dest)) > 0 Then
+                    If Not IsNumeric(dest.Value2) Then UnicodeMessage UI(12) & " " & dest.Row, vbExclamation: dest.Select: GoTo Done
+                    If CDbl(dest.Value2) < 0 Or CDbl(dest.Value2) <> Fix(CDbl(dest.Value2)) Then UnicodeMessage UI(12) & " " & dest.Row, vbExclamation: dest.Select: GoTo Done
+                    Sh.Cells(dest.Row, dest.Column + 1).Select
+                End If
+            ElseIf dest.Column = 10 Then
+                If Len(CellText(dest)) > 0 Then
+                    If Not IsNumeric(dest.Value2) Then UnicodeMessage UI(57) & " " & dest.Row, vbExclamation: dest.Select: GoTo Done
+                    If CDbl(dest.Value2) <= 0 Or CDbl(dest.Value2) > 2958465 Then UnicodeMessage UI(57) & " " & dest.Row, vbExclamation: dest.Select: GoTo Done
+                    If dest.Row < totalRow - 1 Then
+                        StartSearch Sh.Cells(dest.Row + 1, 2)
+                    Else
+                        Sh.Range("L6").Select
+                    End If
+                End If
+            End If
+        End If
     ElseIf Sh.Name = WS(DRIVERS).Name Then
         RefreshDriver
     ElseIf Sh.Name = WS(SETTINGS).Name Then
