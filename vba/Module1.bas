@@ -73,7 +73,7 @@ Private Declare PtrSafe Function LiveCursor Lib "user32" Alias "LoadCursorW" (By
 Private LiveWindow As LongPtr, LiveEdit As LongPtr, LiveList As LongPtr, LiveCount As LongPtr
 Private LiveFinished As Boolean, LiveChosen As Long, LiveFailure As String
 Private LiveData As Variant, LiveHaystack() As String, LiveRows() As Long
-Private Declare PtrSafe Function LiveInvalidate Lib "user32" Alias "InvalidateRect" (ByVal hwnd As LongPtr, ByVal rectangle As LongPtr, ByVal erase As Long) As Long
+Private Declare PtrSafe Function LiveInvalidate Lib "user32" Alias "InvalidateRect" (ByVal hwnd As LongPtr, ByVal rectangle As LongPtr, ByVal eraseBackground As Long) As Long
 
 Private Function UnicodeMessage(ByVal prompt As String, Optional ByVal buttons As Long = 0) As Long
     Dim title As String
