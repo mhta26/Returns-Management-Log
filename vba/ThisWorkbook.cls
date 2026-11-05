@@ -49,6 +49,7 @@ Private Sub Workbook_SheetActivate(ByVal Sh As Object)
 End Sub
 
 Private Sub Workbook_BeforeClose(Cancel As Boolean)
+    Module1.CancelNativeDropdown
     Module1.ReleaseNotesReturn
     Module1.RestoreSearchStatus
 End Sub

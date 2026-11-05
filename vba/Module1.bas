@@ -21,6 +21,7 @@ Private Declare Function ShellExecuteW Lib "shell32" (ByVal hwnd As Long, ByVal 
 Private EntryModeActive As Boolean, PreviousReturnEnabled As Boolean, PreviousReturnDirection As Long
 Private PendingEntryAddress As String, LastEntryRow As Long, LastEntryColumn As Long
 Private PendingNativeDropdown As String
+Private DropdownScheduled As Boolean, DropdownTime As Date, DropdownProcedure As String, DropdownAddress As String, DropdownFiltered As Boolean
 Private NotesReturnBound As Boolean
 
 Private ClientCache As Variant, ProductCache As Variant
@@ -420,6 +421,7 @@ Private Sub BeginEntryMode()
 End Sub
 
 Public Sub RestoreEntryMode()
+    CancelNativeDropdown
     RestoreSearchStatus
     ReleaseNotesReturn
     PendingNativeDropdown = ""
@@ -432,12 +434,68 @@ Public Sub RestoreEntryMode()
     LastEntryRow = 0: LastEntryColumn = 0
 End Sub
 
+Public Sub CancelNativeDropdown()
+    On Error Resume Next
+    If DropdownScheduled Then Application.OnTime EarliestTime:=DropdownTime, Procedure:=DropdownProcedure, Schedule:=False
+    DropdownScheduled = False
+    DropdownAddress = ""
+    On Error GoTo 0
+End Sub
+
+Private Sub ScheduleNativeDropdown()
+    Dim anchor As Excel.Range, previousAddress As String, previousFiltered As Boolean, wasScheduled As Boolean
+    previousAddress = DropdownAddress
+    previousFiltered = DropdownFiltered
+    wasScheduled = DropdownScheduled
+    CancelNativeDropdown
+    If BusyPrinting Or BusySearching Then Exit Sub
+    If Not ActiveWorkbook Is ThisWorkbook Then Exit Sub
+    If ActiveSheet.Name <> WS(MAIN).Name Then Exit Sub
+    Set anchor = ActiveCell.MergeArea.Cells(1, 1)
+    If Intersect(anchor, SearchInputCells()) Is Nothing Then Exit Sub
+    DropdownAddress = anchor.Address
+    DropdownFiltered = (PendingNativeDropdown = DropdownAddress)
+    If wasScheduled And previousAddress = DropdownAddress And previousFiltered Then DropdownFiltered = True
+    PendingNativeDropdown = ""
+    DropdownTime = Now + TimeSerial(0, 0, 1)
+    DropdownProcedure = "'" & Replace(ThisWorkbook.Name, "'", "''") & "'!Module1.OpenPendingDropdown"
+    Application.OnTime EarliestTime:=DropdownTime, Procedure:=DropdownProcedure
+    DropdownScheduled = True
+End Sub
+
+Public Sub OpenPendingDropdown()
+    Dim anchor As Excel.Range, oldEvents As Boolean, customer As Boolean, listName As String
+    DropdownScheduled = False
+    oldEvents = Application.EnableEvents
+    On Error GoTo Done
+    If BusyPrinting Or BusySearching Then Exit Sub
+    If Not ActiveWorkbook Is ThisWorkbook Then Exit Sub
+    If ActiveSheet.Name <> WS(MAIN).Name Then Exit Sub
+    If Len(DropdownAddress) = 0 Then Exit Sub
+    Set anchor = ActiveCell.MergeArea.Cells(1, 1)
+    If anchor.Address <> DropdownAddress Then Exit Sub
+    If Intersect(anchor, SearchInputCells()) Is Nothing Then Exit Sub
+    Application.EnableEvents = False
+    customer = IsClientCell(anchor)
+    If customer Then listName = "InlineClients" Else listName = "InlineProducts"
+    If Not DropdownFiltered Then BuildList customer, ""
+    SetList anchor, listName
+    Application.EnableEvents = oldEvents
+    DropdownAddress = ""
+    Application.SendKeys "%{DOWN}", False
+    Exit Sub
+Done:
+    Application.EnableEvents = oldEvents
+    DropdownAddress = ""
+End Sub
+
 Public Sub ConfigureEntryMode()
     On Error GoTo Restore
     If Not ActiveWorkbook Is ThisWorkbook Then GoTo Restore
     If ActiveSheet.Name = WS(MAIN).Name Then
         BeginEntryMode
         TrackEntry
+        ScheduleNativeDropdown
         Exit Sub
     End If
 Restore:
@@ -493,16 +551,6 @@ Done:
     BusySearching = False
     Application.EnableEvents = oldEvents
     ConfigureEntryMode
-    If Len(PendingNativeDropdown) > 0 Then
-        If ActiveWorkbook Is ThisWorkbook Then
-            If ActiveSheet.name = WS(MAIN).name Then
-                If ActiveCell.MergeArea.Cells(1, 1).address = PendingNativeDropdown Then
-                    PendingNativeDropdown = ""
-                    Application.SendKeys "%{DOWN}", False
-                End If
-            End If
-        End If
-    End If
     Exit Sub
 Failed:
     UnicodeMessage UI(6) & vbCrLf & Err.Description, vbExclamation
@@ -973,7 +1021,8 @@ Private Sub StartSearch(ByVal dest As Excel.Range)
     SetList dest, listName
     dest.Select
     Application.EnableEvents = oldEvents
-    Application.SendKeys "%{DOWN}", False
+    PendingNativeDropdown = dest.Address
+    ScheduleNativeDropdown
     Exit Sub
 Failed:
     Application.EnableEvents = oldEvents
@@ -998,6 +1047,7 @@ Public Sub HandleChange(ByVal Sh As Object, ByVal target As Excel.Range)
     Dim changed As Excel.Range, cell As Excel.Range, found As Long, customer As Boolean, src As Excel.Worksheet
     Dim query As String, splitAt As Long
     If BusyPrinting Then Exit Sub
+    CancelNativeDropdown
     oldEvents = Application.EnableEvents
     On Error GoTo Failed
     Application.EnableEvents = False
