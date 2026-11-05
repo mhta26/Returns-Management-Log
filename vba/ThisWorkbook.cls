@@ -35,3 +35,15 @@ Private Sub Workbook_BeforePrint(Cancel As Boolean)
     End If
 End Sub
 
+
+Private Sub Workbook_Activate()
+    Module1.ConfigureEntryMode
+End Sub
+
+Private Sub Workbook_Deactivate()
+    Module1.RestoreEntryMode
+End Sub
+
+Private Sub Workbook_SheetActivate(ByVal Sh As Object)
+    Module1.ConfigureEntryMode
+End Sub
