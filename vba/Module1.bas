@@ -1704,7 +1704,7 @@ Private Sub CloseReceiptCopy(ByRef temporary As Excel.Workbook)
 End Sub
 
 Private Sub PrepareReceiptCopy(ByVal number As Long, ByVal totalRow As Long, ByRef temporary As Excel.Workbook, ByRef receipt As Excel.Worksheet)
-    Dim address As String, i As Long
+    Dim address As String, i As Long, lookupLast As Long, usedLast As Long
     address = "A1:M36"
     WS(MAIN).Calculate
     WS(MAIN).Copy
@@ -1716,7 +1716,14 @@ Private Sub PrepareReceiptCopy(ByVal number As Long, ByVal totalRow As Long, ByR
     receipt.Range("I6").value = Now
     receipt.Range("L8").value = "#" & CStr(number)
     receipt.Range("L6").MergeArea.ClearContents
-    receipt.Range("AA:AB").ClearContents
+    lookupLast = Application.Max(receipt.Cells(receipt.Rows.Count, 27).End(xlUp).Row, receipt.Cells(receipt.Rows.Count, 28).End(xlUp).Row)
+    If lookupLast >= 1 Then receipt.Range("AA1:AB" & lookupLast).ClearContents
+    usedLast = receipt.UsedRange.Row + receipt.UsedRange.Rows.Count - 1
+    If usedLast > 36 Then
+        If Application.CountA(receipt.Range("A37:M" & usedLast)) = 0 Then
+            receipt.Rows("37:" & usedLast).Delete
+        End If
+    End If
     receipt.Range(address).Validation.Delete
     For i = receipt.Shapes.count To 1 Step -1
         If Left$(receipt.Shapes(i).name, 4) = "btn_" Or receipt.Shapes(i).name = "cmbLiveSearch" Or receipt.Shapes(i).Type = msoFormControl Then receipt.Shapes(i).Delete
@@ -1761,6 +1768,7 @@ Public Sub ArchiveAndPrint()
     Dim firstRow As Long, totalRow As Long, number As Long, logRow As Long
     Dim pdfPath As String, relativeName As String, paper As Boolean, errorText As String, paperError As String
     Dim oldEvents As Boolean, oldScreen As Boolean, oldCounter As Variant
+    Dim oldCalculation As Excel.XlCalculation
     Dim itemBackup As Variant, noteBackup As Variant, clientCode As Variant, clientName As Variant, topCode As Variant, topName As Variant
     Dim copiesRequested As Variant, copyCount As Long, returnBackup As Variant, invoiceBackup As Variant, driverBackup As Variant
     Dim backupReady As Boolean, resetStarted As Boolean, pdfSaved As Boolean, committed As Boolean
@@ -1768,6 +1776,7 @@ Public Sub ArchiveAndPrint()
     If Not LookupReadyForPrint() Then Exit Sub
     oldEvents = Application.EnableEvents
     oldScreen = Application.ScreenUpdating
+    oldCalculation = Application.Calculation
     On Error GoTo Failed
     Set form = WS(MAIN)
     Set log = ThisWorkbook.Worksheets("Archive")
@@ -1812,6 +1821,7 @@ Public Sub ArchiveAndPrint()
     BusyPrinting = True
     Application.EnableEvents = False
     Application.ScreenUpdating = False
+    Application.Calculation = xlCalculationManual
     WS(SETTINGS).Range("E2").Value2 = number
     form.Calculate
     PrepareReceiptCopy number, totalRow, temporary, receipt
@@ -1864,6 +1874,7 @@ Public Sub ArchiveAndPrint()
     BuildList True, ""
     BuildList False, ""
     RefreshTotals firstRow, totalRow
+    Application.Calculation = oldCalculation
     form.Activate
     ThisWorkbook.Save
     committed = True
@@ -1879,6 +1890,7 @@ Public Sub ArchiveAndPrint()
         On Error GoTo Failed
     End If
     CloseReceiptCopy temporary
+    Application.Calculation = oldCalculation
     Application.EnableEvents = oldEvents
     Application.ScreenUpdating = oldScreen
     BusyPrinting = False
@@ -1915,6 +1927,7 @@ Failed:
         form.Calculate
     End If
     CloseReceiptCopy temporary
+    Application.Calculation = oldCalculation
     Application.EnableEvents = oldEvents
     Application.ScreenUpdating = oldScreen
     BusyPrinting = False
