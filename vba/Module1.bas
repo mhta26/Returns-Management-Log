@@ -21,6 +21,7 @@ Private Declare Function ShellExecuteW Lib "shell32" (ByVal hwnd As Long, ByVal 
 Private EntryModeActive As Boolean, PreviousReturnEnabled As Boolean, PreviousReturnDirection As Long
 Private PendingEntryAddress As String, PendingEntrySearch As Boolean, LastEntryRow As Long, LastEntryColumn As Long
 Private PendingNativeDropdown As String
+Private NotesReturnBound As Boolean
 
 Private Function UnicodeMessage(ByVal prompt As String, Optional ByVal buttons As Long = 0) As Long
     Dim title As String
@@ -335,17 +336,81 @@ Private Function ReceiptWarehouses(ByVal firstRow As Long, ByVal totalRow As Lon
     Next r
 End Function
 
+Public Sub ReleaseNotesReturn()
+    If Not NotesReturnBound Then Exit Sub
+    Application.OnKey "~"
+    Application.OnKey "{ENTER}"
+    NotesReturnBound = False
+End Sub
+
+Private Sub UpdateNotesReturn()
+    Dim firstRow As Long, totalRow As Long, current As Range, macroName As String
+    On Error GoTo Release
+    If Not ActiveWorkbook Is ThisWorkbook Then GoTo Release
+    If ActiveSheet.Name <> WS(MAIN).Name Then GoTo Release
+    Set current = ActiveCell.MergeArea.Cells(1, 1)
+    FormRows firstRow, totalRow
+    If current.Column <> 13 Or current.Row < firstRow Or current.Row >= totalRow Then GoTo Release
+    If Not NotesReturnBound Then
+        macroName = "'" & Replace(ThisWorkbook.Name, "'", "''") & "'!Module1.EnterFromNotes"
+        NotesReturnBound = True
+        Application.OnKey "~", macroName
+        Application.OnKey "{ENTER}", macroName
+    End If
+    Exit Sub
+Release:
+    ReleaseNotesReturn
+End Sub
+
+Public Sub EnterFromNotes()
+    Dim firstRow As Long, totalRow As Long, row As Long, oldEvents As Boolean
+    oldEvents = Application.EnableEvents
+    On Error GoTo Failed
+    If Not ActiveWorkbook Is ThisWorkbook Then GoTo Done
+    If ActiveSheet.Name <> WS(MAIN).Name Then GoTo Done
+    If ActiveCell.MergeArea.Cells(1, 1).Column <> 13 Then GoTo Done
+    row = ActiveCell.Row
+    FormRows firstRow, totalRow
+    If row < firstRow Or row >= totalRow Then GoTo Done
+    Application.EnableEvents = False
+    PendingEntryAddress = "": PendingEntrySearch = False: PendingNativeDropdown = ""
+    ReleaseNotesReturn
+    If row < totalRow - 1 Then
+        WS(MAIN).Cells(row + 1, 3).Select
+    Else
+        WS(MAIN).Range("L6").Select
+    End If
+Done:
+    Application.EnableEvents = oldEvents
+    TrackEntry
+    Exit Sub
+Failed:
+    Application.EnableEvents = oldEvents
+    ReleaseNotesReturn
+    UnicodeMessage UI(6) & vbCrLf & Err.Description, vbExclamation
+End Sub
+
 Private Sub BeginEntryMode()
+    Dim rtl As Boolean
     If Not EntryModeActive Then
         PreviousReturnEnabled = Application.MoveAfterReturn
         PreviousReturnDirection = Application.MoveAfterReturnDirection
         EntryModeActive = True
     End If
     Application.MoveAfterReturn = True
-    Application.MoveAfterReturnDirection = xlToRight
+    rtl = True
+    On Error Resume Next
+    rtl = WS(MAIN).DisplayRightToLeft
+    On Error GoTo 0
+    If rtl Then
+        Application.MoveAfterReturnDirection = xlToLeft
+    Else
+        Application.MoveAfterReturnDirection = xlToRight
+    End If
 End Sub
 
 Public Sub RestoreEntryMode()
+    ReleaseNotesReturn
     PendingNativeDropdown = ""
     If Not EntryModeActive Then Exit Sub
     Application.MoveAfterReturnDirection = PreviousReturnDirection
@@ -381,6 +446,7 @@ Private Sub TrackEntry()
             LastEntryColumn = ActiveCell.MergeArea.Cells(1, 1).Column
         End If
     End If
+    UpdateNotesReturn
 End Sub
 
 Public Sub HandleSelection(ByVal Sh As Object, ByVal target As Range)

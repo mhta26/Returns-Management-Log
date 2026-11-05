@@ -47,3 +47,7 @@ End Sub
 Private Sub Workbook_SheetActivate(ByVal Sh As Object)
     Module1.ConfigureEntryMode
 End Sub
+
+Private Sub Workbook_BeforeClose(Cancel As Boolean)
+    Module1.ReleaseNotesReturn
+End Sub
