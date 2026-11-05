@@ -51,5 +51,4 @@ End Sub
 Private Sub Workbook_BeforeClose(Cancel As Boolean)
     Module1.ReleaseNotesReturn
     Module1.RestoreSearchStatus
-    Module1.ReleaseLookup
 End Sub
