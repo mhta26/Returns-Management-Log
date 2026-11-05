@@ -20,18 +20,18 @@ Private Sub Workbook_SheetBeforeDoubleClick(ByVal Sh As Object, ByVal target As 
     Module1.HandleDoubleClick Sh, target, Cancel
 End Sub
 
-Private Sub Workbook_SheetSelectionChange(ByVal Sh As Object, ByVal Target As Range)
-    Module1.HandleSelection Sh, Target
+Private Sub Workbook_SheetSelectionChange(ByVal Sh As Object, ByVal target As Range)
+    Module1.HandleSelection Sh, target
 End Sub
 
 Private Sub Workbook_BeforePrint(Cancel As Boolean)
     If Module1.BusyPrinting Then Exit Sub
-    If ActiveSheet.Name = ThisWorkbook.Worksheets(1).Name Then
+    If ActiveSheet.name = ThisWorkbook.Worksheets(1).name Then
         Cancel = True
         Module1.ArchiveAndPrint
-    ElseIf Module1.IsSavedReceiptSheet(ActiveSheet.Name) Then
+    ElseIf Module1.IsSavedReceiptSheet(ActiveSheet.name) Then
         Cancel = True
-        Module1.ReprintSavedSheet ActiveSheet.Name
+        Module1.ReprintSavedSheet ActiveSheet.name
     End If
 End Sub
 
@@ -50,4 +50,6 @@ End Sub
 
 Private Sub Workbook_BeforeClose(Cancel As Boolean)
     Module1.ReleaseNotesReturn
+    Module1.RestoreSearchStatus
+    Module1.ReleaseLookup
 End Sub

@@ -23,9 +23,22 @@ Private PendingEntryAddress As String, PendingEntrySearch As Boolean, LastEntryR
 Private PendingNativeDropdown As String
 Private NotesReturnBound As Boolean
 
+Private ClientCache As Variant, ProductCache As Variant
+Private ClientCacheKeys() As String, ProductCacheKeys() As String
+Private ClientCodeIndex As Object, ProductCodeIndex As Object
+Private ClientCacheReady As Boolean, ProductCacheReady As Boolean
+Private ClientCacheLast As Long, ProductCacheLast As Long
+Private SearchStatusOwned As Boolean, OriginalSearchStatus As Variant
+
+Private LookupControl As OLEObject, LookupAnchor As Range
+Private LookupHandler As LookupEvents
+Private LookupUpdating As Boolean, LookupCompleting As Boolean, LookupCustomer As Boolean
+Private LookupChanged As Boolean, LookupKeyboardMove As Boolean, LookupDisabled As Boolean
+Private LookupOriginalCode As Variant, LookupOriginalName As Variant
+
 Private Function UnicodeMessage(ByVal prompt As String, Optional ByVal buttons As Long = 0) As Long
     Dim title As String
-    title = ThisWorkbook.Name
+    title = ThisWorkbook.name
     UnicodeMessage = MessageBoxW(Application.hwnd, StrPtr(prompt), StrPtr(title), buttons Or &H180000)
 End Function
 
@@ -51,7 +64,7 @@ Private Function WS(ByVal n As Long) As Worksheet
     Case SETTINGS: expected = "Sheet4"
     Case DRIVERS
         For Each sheet In ThisWorkbook.Worksheets
-            If sheet.Name = DriverSheetName() Then Set WS = sheet: Exit Function
+            If sheet.name = DriverSheetName() Then Set WS = sheet: Exit Function
         Next sheet
     End Select
     For Each sheet In ThisWorkbook.Worksheets
@@ -68,6 +81,10 @@ Private Function DecodeText(ByVal encoded As String) As String
 End Function
 
 Private Function UI(ByVal n As Long) As String
+    If n = 79 Then UI = DecodeText("0020 2014 0020 064A 064F 0639 0631 0636 0020 0623 0648 0644 0020 0031 0030 0030 061B 0020 0627 0643 062A 0628 0020 062A 0641 0627 0635 064A 0644 0020 0623 0643 062B 0631 0020 0644 062A 0636 064A 064A 0642 0020 0627 0644 0646 062A 0627 0626 062C 002E"): Exit Function
+    If n = 78 Then UI = DecodeText("0627 062E 062A 0631 0020 0627 0644 0639 0645 064A 0644 0020 0623 0648 0020 0627 0644 0635 0646 0641 0020 0645 0646 0020 0646 062A 0627 0626 062C 0020 0627 0644 0628 062D 062B 0020 0642 0628 0644 0020 0627 0644 0637 0628 0627 0639 0629 002E"): Exit Function
+    If n = 77 Then UI = DecodeText("0627 0644 0628 062D 062B 0020 0627 0644 0641 0648 0631 064A 0020 063A 064A 0631 0020 0645 062A 0627 062D 002E 0020 0627 0633 0645 062D 0020 0628 0639 0646 0627 0635 0631 0020 0041 0063 0074 0069 0076 0065 0058 0020 0644 0647 0630 0627 0020 0627 0644 0645 0635 0646 0641 0020 0627 0644 0645 0648 062B 0648 0642 060C 0020 0623 0648 0020 0627 0633 062A 062E 062F 0645 0020 0627 0644 0628 062D 062B 0020 0627 0644 0639 0627 062F 064A 0020 062B 0645 0020 0045 006E 0074 0065 0072 002E"): Exit Function
+    If n = 75 Then UI = DecodeText("0646 062A 0627 0626 062C 0020 0627 0644 0628 062D 062B 0020 2014 0020 0627 062E 062A 0631 0020 0645 0646 0020 0627 0644 0642 0627 0626 0645 0629 003A 0020"): Exit Function
     If n = 37 Then UI = WarehouseFormula(): Exit Function
     If n >= 62 And n <= 65 Then UI = Trim$(CStr(WS(SETTINGS).Cells(n - 60, 2).Value2)): Exit Function
     If n = 66 Then UI = DecodeText("0631 0627 062C 0639 0020 0642 0648 0627 0639 062F 0020 0627 0644 0645 062E 0627 0632 0646 003A 0020 062B 0644 0627 062B 0629 0020 062D 062F 0648 062F " & _
@@ -272,7 +289,7 @@ End Function
 Private Function WarehouseFormula() As String
     Dim s As String, d As String, remain As String, bad As String, quote As String
     quote = Chr$(34)
-    s = "'" & Replace(WS(SETTINGS).Name, "'", "''") & "'!"
+    s = "'" & Replace(WS(SETTINGS).name, "'", "''") & "'!"
     d = "RC[-1]": remain = "INT(" & d & ")-INT(R6C9)"
     bad = quote & UI(67) & quote
     WarehouseFormula = "=IF(" & d & "=" & quote & quote & "," & quote & quote & ",IFERROR(IF(OR(NOT(ISNUMBER(" & d & "))," & d & "<=0," & d & ">2958465)," & bad & ",IF(" & remain & "<=VALUE(" & s & "R2C1),TRIM(" & s & "R2C2),IF(" & remain & "<=VALUE(" & s & "R3C1),TRIM(" & s & "R3C2),IF(" & remain & "<=VALUE(" & s & "R4C1),TRIM(" & s & "R4C2),TRIM(" & s & "R5C2)))))," & bad & "))"
@@ -317,7 +334,7 @@ End Sub
 Private Function DriverFormula() As String
     Dim name As String, quote As String
     quote = Chr$(34)
-    name = "'" & Replace(WS(DRIVERS).Name, "'", "''") & "'!$A:$B"
+    name = "'" & Replace(WS(DRIVERS).name, "'", "''") & "'!$A:$B"
     DriverFormula = "=IF(B6=" & quote & quote & "," & quote & quote & ",IFERROR(VLOOKUP(B6&" & quote & quote & "," & name & ",2,FALSE),IFERROR(VLOOKUP(IFERROR(VALUE(B6),B6)," & name & ",2,FALSE)," & quote & quote & ")))"
 End Function
 
@@ -347,12 +364,12 @@ Private Sub UpdateNotesReturn()
     Dim firstRow As Long, totalRow As Long, current As Range, macroName As String
     On Error GoTo Release
     If Not ActiveWorkbook Is ThisWorkbook Then GoTo Release
-    If ActiveSheet.Name <> WS(MAIN).Name Then GoTo Release
+    If ActiveSheet.name <> WS(MAIN).name Then GoTo Release
     Set current = ActiveCell.MergeArea.Cells(1, 1)
     FormRows firstRow, totalRow
-    If current.Column <> 13 Or current.Row < firstRow Or current.Row >= totalRow Then GoTo Release
+    If current.Column <> 13 Or current.row < firstRow Or current.row >= totalRow Then GoTo Release
     If Not NotesReturnBound Then
-        macroName = "'" & Replace(ThisWorkbook.Name, "'", "''") & "'!Module1.EnterFromNotes"
+        macroName = "'" & Replace(ThisWorkbook.name, "'", "''") & "'!Module1.EnterFromNotes"
         NotesReturnBound = True
         Application.OnKey "~", macroName
         Application.OnKey "{ENTER}", macroName
@@ -367,9 +384,9 @@ Public Sub EnterFromNotes()
     oldEvents = Application.EnableEvents
     On Error GoTo Failed
     If Not ActiveWorkbook Is ThisWorkbook Then GoTo Done
-    If ActiveSheet.Name <> WS(MAIN).Name Then GoTo Done
+    If ActiveSheet.name <> WS(MAIN).name Then GoTo Done
     If ActiveCell.MergeArea.Cells(1, 1).Column <> 13 Then GoTo Done
-    row = ActiveCell.Row
+    row = ActiveCell.row
     FormRows firstRow, totalRow
     If row < firstRow Or row >= totalRow Then GoTo Done
     Application.EnableEvents = False
@@ -383,6 +400,7 @@ Public Sub EnterFromNotes()
 Done:
     Application.EnableEvents = oldEvents
     TrackEntry
+    ConfigureEntryMode
     Exit Sub
 Failed:
     Application.EnableEvents = oldEvents
@@ -410,6 +428,8 @@ Private Sub BeginEntryMode()
 End Sub
 
 Public Sub RestoreEntryMode()
+    HideLookup
+    RestoreSearchStatus
     ReleaseNotesReturn
     PendingNativeDropdown = ""
     If Not EntryModeActive Then Exit Sub
@@ -425,9 +445,19 @@ End Sub
 Public Sub ConfigureEntryMode()
     On Error GoTo Restore
     If Not ActiveWorkbook Is ThisWorkbook Then GoTo Restore
-    If ActiveSheet.Name = WS(MAIN).Name Then
+    If ActiveSheet.name = WS(MAIN).name Then
         BeginEntryMode
         TrackEntry
+        If IsLookupCell(ActiveCell) Then
+            If ShowLookup(ActiveCell) Then
+                If PendingNativeDropdown = ActiveCell.MergeArea.Cells(1, 1).Address Then
+                    PendingNativeDropdown = ""
+                    LookupTextChanged
+                End If
+            End If
+        Else
+            HideLookup
+        End If
         Exit Sub
     End If
 Restore:
@@ -435,14 +465,14 @@ Restore:
 End Sub
 
 Private Sub QueueEntry(ByVal destination As Range, Optional ByVal openSearch As Boolean = False)
-    PendingEntryAddress = destination.Address
+    PendingEntryAddress = destination.address
     PendingEntrySearch = openSearch
 End Sub
 
 Private Sub TrackEntry()
     If ActiveWorkbook Is ThisWorkbook Then
-        If ActiveSheet.Name = WS(MAIN).Name Then
-            LastEntryRow = ActiveCell.MergeArea.Cells(1, 1).Row
+        If ActiveSheet.name = WS(MAIN).name Then
+            LastEntryRow = ActiveCell.MergeArea.Cells(1, 1).row
             LastEntryColumn = ActiveCell.MergeArea.Cells(1, 1).Column
         End If
     End If
@@ -451,8 +481,8 @@ End Sub
 
 Public Sub HandleSelection(ByVal Sh As Object, ByVal target As Range)
     Dim cell As Range, firstRow As Long, totalRow As Long, search As Boolean, oldEvents As Boolean
-    If BusyPrinting Or BusySearching Then Exit Sub
-    If Sh.Name <> WS(MAIN).Name Then Exit Sub
+    If BusyPrinting Or BusySearching Or LookupUpdating Or LookupCompleting Then Exit Sub
+    If Sh.name <> WS(MAIN).name Then Exit Sub
     oldEvents = Application.EnableEvents
     On Error GoTo Failed
     Application.EnableEvents = False
@@ -465,15 +495,15 @@ Public Sub HandleSelection(ByVal Sh As Object, ByVal target As Range)
         cell.Select
         GoTo Done
     End If
-    If target.CountLarge > 1 And target.Address <> cell.MergeArea.Address Then GoTo Done
+    If target.CountLarge > 1 And target.address <> cell.MergeArea.address Then GoTo Done
     FormRows firstRow, totalRow
-    If LastEntryRow = cell.Row And cell.Row >= firstRow And cell.Row < totalRow Then
+    If LastEntryRow = cell.row And cell.row >= firstRow And cell.row < totalRow Then
         If LastEntryColumn = 10 And cell.Column = 11 Then
-            Sh.Cells(cell.Row, 12).Select
+            Sh.Cells(cell.row, 12).Select
             GoTo Done
         ElseIf LastEntryColumn = 13 And cell.Column = 14 Then
-            If cell.Row < totalRow - 1 Then
-                Sh.Cells(cell.Row + 1, 3).Select
+            If cell.row < totalRow - 1 Then
+                Sh.Cells(cell.row + 1, 3).Select
             Else
                 Sh.Range("L6").Select
             End If
@@ -487,8 +517,8 @@ Done:
     ConfigureEntryMode
     If Len(PendingNativeDropdown) > 0 Then
         If ActiveWorkbook Is ThisWorkbook Then
-            If ActiveSheet.Name = WS(MAIN).Name Then
-                If ActiveCell.MergeArea.Cells(1, 1).Address = PendingNativeDropdown Then
+            If ActiveSheet.name = WS(MAIN).name Then
+                If ActiveCell.MergeArea.Cells(1, 1).address = PendingNativeDropdown Then
                     PendingNativeDropdown = ""
                     Application.SendKeys "%{DOWN}", False
                 End If
@@ -541,13 +571,474 @@ Private Function Matches(ByVal haystack As String, ByVal query As String) As Boo
     Matches = True
 End Function
 
+Private Function IsLookupCell(ByVal target As Range) As Boolean
+    Dim firstRow As Long, totalRow As Long, cell As Range
+    Set cell = target.MergeArea.Cells(1, 1)
+    If cell.Row = 8 And (cell.Column = 1 Or cell.Column = 2) Then IsLookupCell = True: Exit Function
+    FormRows firstRow, totalRow
+    IsLookupCell = (cell.Row >= firstRow And cell.Row < totalRow And (cell.Column = 2 Or cell.Column = 3))
+End Function
+
+Public Sub HideLookup()
+    On Error Resume Next
+    LookupUpdating = True
+    If Not LookupControl Is Nothing Then LookupControl.Visible = False
+    Set LookupAnchor = Nothing
+    LookupUpdating = False
+    RestoreSearchStatus
+    On Error GoTo 0
+End Sub
+
+Public Sub ReleaseLookup()
+    HideLookup
+    On Error Resume Next
+    If Not LookupHandler Is Nothing Then Set LookupHandler.Combo = Nothing
+    Set LookupHandler = Nothing
+    Set LookupControl = Nothing
+    On Error GoTo 0
+End Sub
+
+Private Function ShowLookup(ByVal target As Range) As Boolean
+    Dim anchor As Range, oldEvents As Boolean, errorText As String, errorNumber As Long
+    If LookupDisabled Or LookupCompleting Or LookupUpdating Or BusyPrinting Then Exit Function
+    If Not IsLookupCell(target) Then Exit Function
+    oldEvents = Application.EnableEvents
+    On Error GoTo Failed
+    LookupUpdating = True
+    Application.EnableEvents = False
+    LookupCustomer = IsClientCell(target.MergeArea.Cells(1, 1))
+    If LookupCustomer Then Set anchor = WS(MAIN).Range("A8") Else Set anchor = WS(MAIN).Cells(target.Row, 3)
+    If Not LookupAnchor Is Nothing Then
+        If LookupAnchor.Address = anchor.Address Then
+            If Not LookupControl Is Nothing Then
+                If LookupControl.Visible Then ShowLookup = True: GoTo Done
+            End If
+        End If
+    End If
+    Set LookupControl = Nothing
+    On Error Resume Next
+    Set LookupControl = WS(MAIN).OLEObjects("cmbLiveSearch")
+    On Error GoTo Failed
+    If LookupControl Is Nothing Then
+        Set LookupControl = WS(MAIN).OLEObjects.Add(ClassType:="Forms.ComboBox.1", Link:=False, DisplayAsIcon:=False, Left:=anchor.Left, Top:=anchor.Top, Width:=anchor.MergeArea.Width, Height:=anchor.MergeArea.Height)
+        LookupControl.Name = "cmbLiveSearch"
+    End If
+    If LookupHandler Is Nothing Then Set LookupHandler = New LookupEvents
+    Set LookupHandler.Combo = LookupControl.Object
+    Set LookupAnchor = anchor
+    If LookupCustomer Then
+        LookupOriginalCode = WS(MAIN).Range("A8").Value2
+        LookupOriginalName = WS(MAIN).Range("B8").Value2
+    Else
+        LookupOriginalCode = WS(MAIN).Cells(anchor.Row, 2).Value2
+        LookupOriginalName = WS(MAIN).Cells(anchor.Row, 3).Value2
+    End If
+    EnsureSearchCache LookupCustomer
+    With LookupControl
+        .LinkedCell = ""
+        .ListFillRange = ""
+        .Placement = xlMoveAndSize
+        .PrintObject = False
+        .Left = anchor.Left
+        .Top = anchor.Top
+        .Width = anchor.MergeArea.Width
+        .Height = anchor.MergeArea.Height
+        With .Object
+            .Style = 0
+            .MatchEntry = 2
+            .MatchRequired = False
+            .ColumnCount = 2
+            .BoundColumn = 2
+            .TextColumn = 1
+            .ColumnWidths = "280 pt;110 pt"
+            .ListWidth = 400
+            .ListRows = 8
+            .TextAlign = 3
+            .Font.Name = anchor.Font.Name
+            .Font.Size = anchor.Font.Size
+            .Font.Bold = anchor.Font.Bold
+            .ForeColor = RGB(0, 0, 0)
+            .BackColor = anchor.Interior.Color
+            .Clear
+            .Text = CellText(anchor)
+            .SelStart = 0
+            .SelLength = Len(.Text)
+        End With
+        LookupChanged = False
+        LookupKeyboardMove = False
+        .Visible = True
+        anchor.Select
+        .Activate
+    End With
+    ShowLookup = True
+Done:
+    LookupUpdating = False
+    Application.EnableEvents = oldEvents
+    Exit Function
+Failed:
+    errorNumber = Err.Number: errorText = Err.Description
+    LookupUpdating = False
+    Application.EnableEvents = oldEvents
+    LookupDisabled = True
+    HideLookup
+    SearchStatus UI(77) & " [" & errorNumber & "] " & errorText
+End Function
+
+Private Sub FilterLookupData(ByRef data As Variant, ByRef prepared() As String, ByVal query As String, Optional ByVal showAll As Boolean = False)
+    Dim tokens As Variant, token As Variant, i As Long, j As Long, rows As Long, count As Long
+    Dim matches() As Long, result() As Variant, accepted As Boolean, caret As Long, length As Long, shown As Long
+    If showAll Then tokens = Split("", " ") Else tokens = Split(Normal(query), " ")
+    caret = LookupControl.Object.SelStart
+    length = LookupControl.Object.SelLength
+    If IsArray(data) And (Len(Normal(query)) > 0 Or showAll) Then
+        rows = UBound(data, 1)
+        ReDim matches(1 To rows)
+        For i = 1 To rows
+            If Len(prepared(i)) > 0 Then
+                accepted = True
+                For Each token In tokens
+                    If Len(token) > 0 Then
+                        If InStr(1, prepared(i), CStr(token), vbBinaryCompare) = 0 Then accepted = False: Exit For
+                    End If
+                Next token
+                If accepted Then count = count + 1: matches(count) = i
+            End If
+        Next i
+    End If
+    shown = count
+    If shown > 100 Then shown = 100
+    With LookupControl.Object
+        .Clear
+        If shown > 0 Then
+            ReDim result(0 To shown - 1, 0 To 1)
+            For j = 0 To shown - 1
+                i = matches(j + 1)
+                result(j, 0) = CStr(data(i, 2))
+                result(j, 1) = CStr(data(i, 1))
+            Next j
+            .List = result
+        End If
+        .Text = query
+        If caret > Len(query) Then caret = Len(query)
+        If length > Len(query) - caret Then length = Len(query) - caret
+        .SelStart = caret
+        .SelLength = length
+        If count > 0 Then .DropDown
+    End With
+    If count > shown Then
+        SearchStatus UI(75) & CStr(count) & UI(79)
+    ElseIf Len(query) = 0 Then
+        RestoreSearchStatus
+    ElseIf count = 0 Then
+        SearchStatus UI(5)
+    Else
+        SearchStatus UI(75) & CStr(count)
+    End If
+End Sub
+
+Private Sub ClearLookupInput()
+    Dim oldEvents As Boolean, errorNumber As Long, errorText As String
+    oldEvents = Application.EnableEvents
+    On Error GoTo Failed
+    Application.EnableEvents = False
+    If LookupCustomer Then
+        WS(MAIN).Range("A8").ClearContents
+        WS(MAIN).Range("B8").MergeArea.ClearContents
+    Else
+        WS(MAIN).Cells(LookupAnchor.Row, 2).ClearContents
+        WS(MAIN).Cells(LookupAnchor.Row, 3).MergeArea.ClearContents
+    End If
+    Application.EnableEvents = oldEvents
+    Exit Sub
+Failed:
+    errorNumber = Err.Number: errorText = Err.Description
+    Application.EnableEvents = oldEvents
+    Err.Raise errorNumber, "ClearLookupInput", errorText
+End Sub
+
+Private Sub CancelLookup()
+    Dim oldEvents As Boolean
+    oldEvents = Application.EnableEvents
+    On Error GoTo Done
+    Application.EnableEvents = False
+    If LookupChanged And Not LookupAnchor Is Nothing Then
+        If LookupCustomer Then
+            WS(MAIN).Range("A8").Value2 = LookupOriginalCode
+            WS(MAIN).Range("B8").Value2 = LookupOriginalName
+        Else
+            WS(MAIN).Cells(LookupAnchor.Row, 2).Value2 = LookupOriginalCode
+            WS(MAIN).Cells(LookupAnchor.Row, 3).Value2 = LookupOriginalName
+        End If
+        WS(MAIN).Calculate
+    End If
+Done:
+    HideLookup
+    RestoreSearchStatus
+    Application.EnableEvents = oldEvents
+End Sub
+
+Public Sub LookupTextChanged()
+    Dim query As String, errorText As String
+    If LookupUpdating Or LookupCompleting Then Exit Sub
+    If LookupAnchor Is Nothing Or LookupControl Is Nothing Then Exit Sub
+    On Error GoTo Failed
+    If LookupControl.Object.ListIndex >= 0 Then Exit Sub
+    If Not LookupChanged Then ClearLookupInput
+    LookupChanged = True
+    query = CStr(LookupControl.Object.Text)
+    LookupUpdating = True
+    If LookupCustomer Then
+        FilterLookupData ClientCache, ClientCacheKeys, query
+    Else
+        FilterLookupData ProductCache, ProductCacheKeys, query
+    End If
+    LookupUpdating = False
+    Exit Sub
+Failed:
+    errorText = Err.Description
+    LookupUpdating = False
+    LookupDisabled = True
+    HideLookup
+    SearchStatus UI(77) & " " & errorText
+End Sub
+
+Private Function CommitLookup() As Boolean
+    Dim selected As Long, code As String, found As Long, anchor As Range
+    Dim oldEvents As Boolean, errorText As String
+    If LookupUpdating Or LookupCompleting Then Exit Function
+    If LookupAnchor Is Nothing Or LookupControl Is Nothing Then Exit Function
+    oldEvents = Application.EnableEvents
+    On Error GoTo Failed
+    Set anchor = LookupAnchor
+    selected = LookupControl.Object.ListIndex
+    If selected < 0 And LookupControl.Object.ListCount = 1 And LookupChanged Then selected = 0
+    If selected >= 0 Then
+        code = CStr(LookupControl.Object.List(selected, 1))
+        found = CodeRow(CandidateSource(LookupCustomer), code)
+        If found <= 0 Then UnicodeMessage UI(8), vbExclamation: Exit Function
+    ElseIf Not LookupChanged Then
+        If LookupCustomer Then code = CellText(WS(MAIN).Range("A8")) Else code = CellText(WS(MAIN).Cells(anchor.Row, 2))
+        found = CodeRow(CandidateSource(LookupCustomer), code)
+    ElseIf Len(Normal(CStr(LookupControl.Object.Text))) > 0 Then
+        If LookupControl.Object.ListCount > 0 Then LookupControl.Object.DropDown Else SearchStatus UI(5)
+        Exit Function
+    End If
+    LookupCompleting = True
+    Application.EnableEvents = False
+    HideLookup
+    PendingEntryAddress = "": PendingNativeDropdown = ""
+    If found > 0 Then
+        ApplyChoice anchor, found
+    ElseIf LookupCustomer Then
+        WS(MAIN).Range("A8").ClearContents
+        WS(MAIN).Range("B8").MergeArea.ClearContents
+        WS(MAIN).Cells(FirstItemRow(), 3).Select
+    Else
+        WS(MAIN).Cells(anchor.Row, 2).ClearContents
+        WS(MAIN).Cells(anchor.Row, 3).MergeArea.ClearContents
+        WS(MAIN).Cells(anchor.Row, 7).Select
+    End If
+    CommitLookup = True
+Done:
+    Application.EnableEvents = oldEvents
+    LookupCompleting = False
+    RestoreSearchStatus
+    TrackEntry
+    ConfigureEntryMode
+    Exit Function
+Failed:
+    errorText = Err.Description
+    Application.EnableEvents = oldEvents
+    LookupCompleting = False
+    HideLookup
+    UnicodeMessage UI(6) & vbCrLf & errorText, vbExclamation
+End Function
+
+Public Sub LookupClicked()
+    If LookupUpdating Or LookupCompleting Or LookupKeyboardMove Then Exit Sub
+    If LookupControl Is Nothing Or LookupAnchor Is Nothing Then Exit Sub
+    If LookupControl.Object.ListIndex >= 0 Then CommitLookup
+End Sub
+
+Public Sub LookupKeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    If LookupUpdating Or LookupCompleting Then Exit Sub
+    Select Case CLng(KeyCode)
+    Case 38, 40
+        LookupKeyboardMove = True
+        If LookupControl.Object.ListCount = 0 And Not LookupChanged Then LookupShowAll
+    Case 13, 9
+        KeyCode = 0
+        CommitLookup
+    Case 27
+        KeyCode = 0
+        CancelLookup
+    End Select
+End Sub
+
+Public Sub LookupDropRequested()
+    If LookupUpdating Or LookupCompleting Then Exit Sub
+    If LookupAnchor Is Nothing Or LookupControl Is Nothing Then Exit Sub
+    If LookupControl.Object.ListCount = 0 And Not LookupChanged Then LookupShowAll
+End Sub
+
+Private Sub LookupShowAll()
+    Dim query As String
+    If LookupUpdating Or LookupCompleting Then Exit Sub
+    If LookupAnchor Is Nothing Or LookupControl Is Nothing Then Exit Sub
+    On Error GoTo Done
+    query = CStr(LookupControl.Object.Text)
+    LookupUpdating = True
+    If LookupCustomer Then FilterLookupData ClientCache, ClientCacheKeys, query, True Else FilterLookupData ProductCache, ProductCacheKeys, query, True
+Done:
+    LookupUpdating = False
+End Sub
+
+Public Sub LookupKeyReleased()
+    LookupKeyboardMove = False
+End Sub
+
+Private Function LookupReadyForPrint() As Boolean
+    If Not LookupAnchor Is Nothing Then
+        If LookupChanged Then
+            If Not CommitLookup() Then
+                UnicodeMessage UI(78), vbExclamation
+                Exit Function
+            End If
+        End If
+    End If
+    HideLookup
+    LookupReadyForPrint = True
+End Function
+
+Private Sub InvalidateSearchCaches()
+    ClientCacheReady = False
+    ProductCacheReady = False
+End Sub
+
+Private Sub EnsureSearchCache(ByVal customer As Boolean)
+    Dim src As Worksheet, data As Variant, prepared() As String, index As Object
+    Dim last As Long, i As Long, key As String, ready As Boolean, cachedLast As Long
+    If customer Then
+        ready = ClientCacheReady: cachedLast = ClientCacheLast
+    Else
+        ready = ProductCacheReady: cachedLast = ProductCacheLast
+    End If
+    Set src = CandidateSource(customer)
+    last = LastRow(src, 2)
+    If ready And cachedLast = last Then Exit Sub
+    Set index = CreateObject("Scripting.Dictionary")
+    index.CompareMode = vbBinaryCompare
+    If last >= 2 Then
+        data = src.Range("A2:B" & last).Value2
+        ReDim prepared(1 To UBound(data, 1))
+        For i = 1 To UBound(data, 1)
+            If IsError(data(i, 1)) Or IsError(data(i, 2)) Then
+                data(i, 1) = "": data(i, 2) = ""
+            End If
+            If Len(Trim$(CStr(data(i, 1)))) > 0 And Len(Trim$(CStr(data(i, 2)))) > 0 Then
+                key = Normal(CStr(data(i, 1)))
+                prepared(i) = Normal(CStr(data(i, 2)) & " " & CStr(data(i, 1)))
+                If index.Exists(key) Then index(key) = -1 Else index.Add key, i + 1
+            End If
+        Next i
+    Else
+        ReDim prepared(1 To 1)
+    End If
+    If customer Then
+        ClientCache = data: ClientCacheKeys = prepared
+        Set ClientCodeIndex = index
+        ClientCacheLast = last: ClientCacheReady = True
+    Else
+        ProductCache = data: ProductCacheKeys = prepared
+        Set ProductCodeIndex = index
+        ProductCacheLast = last: ProductCacheReady = True
+    End If
+End Sub
+
+Private Function FilterSearchData(ByVal customer As Boolean, ByVal query As String, ByRef data As Variant, ByRef prepared() As String) As Long
+    Dim i As Long, j As Long, count As Long, oldLast As Long, column As Long, rows As Long
+    Dim matches() As Long, result() As Variant, tokens As Variant, token As Variant, accepted As Boolean
+    Dim listName As String, reference As String, existing As Name
+    If customer Then column = 27: listName = "InlineClients" Else column = 28: listName = "InlineProducts"
+    tokens = Split(Normal(query), " ")
+    If IsArray(data) Then
+        rows = UBound(data, 1)
+        ReDim matches(1 To rows)
+        For i = 1 To rows
+            If Len(prepared(i)) > 0 Then
+                accepted = True
+                For Each token In tokens
+                    If Len(token) > 0 Then
+                        If InStr(1, prepared(i), CStr(token), vbBinaryCompare) = 0 Then accepted = False: Exit For
+                    End If
+                Next token
+                If accepted Then count = count + 1: matches(count) = i
+            End If
+        Next i
+    End If
+    With WS(MAIN)
+        oldLast = .Cells(.Rows.Count, column).End(xlUp).Row
+        If oldLast >= 2 Then .Range(.Cells(2, column), .Cells(oldLast, column)).ClearContents
+        If count > 0 Then
+            ReDim result(1 To count, 1 To 1)
+            For j = 1 To count
+                i = matches(j)
+                result(j, 1) = Left$(CStr(data(i, 2)), 220) & " | " & CStr(data(i, 1))
+            Next j
+            .Cells(2, column).Resize(count, 1).Value2 = result
+        Else
+            .Cells(2, column).Value2 = UI(5)
+        End If
+        reference = "='" & Replace(.Name, "'", "''") & "'!" & .Cells(2, column).Resize(IIf(count > 0, count, 1), 1).Address
+        .Range("AA:AB").EntireColumn.Hidden = True
+    End With
+    On Error Resume Next
+    Set existing = ThisWorkbook.Names(listName)
+    On Error GoTo 0
+    If existing Is Nothing Then
+        ThisWorkbook.Names.Add Name:=listName, RefersTo:=reference
+    Else
+        existing.RefersTo = reference
+    End If
+    FilterSearchData = count
+End Function
+
+Private Sub SearchStatus(ByVal text As String)
+    If Not SearchStatusOwned Then
+        OriginalSearchStatus = Application.StatusBar
+        SearchStatusOwned = True
+    End If
+    Application.StatusBar = text
+End Sub
+
+Public Sub RestoreSearchStatus()
+    If SearchStatusOwned Then
+        Application.StatusBar = OriginalSearchStatus
+        SearchStatusOwned = False
+    End If
+End Sub
+
 Private Function CodeRow(ByVal src As Worksheet, ByVal code As String) As Long
-    Dim r As Long, found As Long
-    If Len(code) = 0 Then Exit Function
+    Dim key As String, index As Object, r As Long, found As Long
+    key = Normal(code)
+    If Len(key) = 0 Then Exit Function
+    If src.Name = WS(CLIENTS).Name Then
+        EnsureSearchCache True
+        Set index = ClientCodeIndex
+    ElseIf src.Name = WS(PRODUCTS).Name Then
+        EnsureSearchCache False
+        Set index = ProductCodeIndex
+    End If
+    If Not index Is Nothing Then
+        If index.Exists(key) Then CodeRow = CLng(index(key))
+        Exit Function
+    End If
     For r = 2 To LastRow(src, 2)
-        If Normal(CStr(src.Cells(r, 1).Value2)) = Normal(code) And Len(CStr(src.Cells(r, 2).Value2)) > 0 Then
-            If found > 0 Then CodeRow = -1: Exit Function
-            found = r
+        If Not IsError(src.Cells(r, 1).Value2) And Not IsError(src.Cells(r, 2).Value2) Then
+            If Normal(CStr(src.Cells(r, 1).Value2)) = key And Len(CStr(src.Cells(r, 2).Value2)) > 0 Then
+                If found > 0 Then CodeRow = -1: Exit Function
+                found = r
+            End If
         End If
     Next r
     CodeRow = found
@@ -630,7 +1121,7 @@ Private Sub ColorStatuses(ByVal firstRow As Long, ByVal totalRow As Long)
     Set target = WS(MAIN).Range(WS(MAIN).Cells(firstRow, 11), WS(MAIN).Cells(totalRow - 1, 11))
     colors = Array(RGB(255, 199, 206), RGB(248, 203, 173), RGB(255, 235, 156), RGB(198, 239, 206))
     Dim unchanged As Boolean
-    unchanged = (target.FormatConditions.Count = 4)
+    unchanged = (target.FormatConditions.count = 4)
     If unchanged Then
         For i = 1 To 4
             Set rule = target.FormatConditions(i)
@@ -638,7 +1129,7 @@ Private Sub ColorStatuses(ByVal firstRow As Long, ByVal totalRow As Long)
                 unchanged = False
                 Exit For
             End If
-            If rule.AppliesTo.Address <> target.Address Then unchanged = False
+            If rule.AppliesTo.address <> target.address Then unchanged = False
             If rule.Operator <> xlEqual Then unchanged = False
             If rule.Formula1 <> "=" & Chr$(34) & UI(61 + i) & Chr$(34) Then unchanged = False
         Next i
@@ -688,7 +1179,7 @@ Private Sub FitReceiptPage(ByVal receipt As Worksheet)
     Application.PrintCommunication = previousCommunication
     Exit Sub
 Failed:
-    errorNumber = Err.Number
+    errorNumber = Err.number
     errorText = Err.Description
     On Error Resume Next
     Application.PrintCommunication = previousCommunication
@@ -712,7 +1203,7 @@ Private Sub RefreshTotals(ByVal firstRow As Long, ByVal totalRow As Long)
     Application.EnableEvents = oldEvents
     Exit Sub
 Failed:
-    errorNumber = Err.Number
+    errorNumber = Err.number
     errorText = Err.Description
     Application.EnableEvents = oldEvents
     Err.Raise errorNumber, "RefreshTotals", errorText
@@ -768,47 +1259,16 @@ Private Sub SetList(ByVal dest As Range, ByVal listName As String)
 End Sub
 
 Private Function BuildList(ByVal customer As Boolean, ByVal query As String) As Long
-    Dim src As Worksheet, data As Variant, result() As Variant
-    Dim i As Long, n As Long, count As Long, c As Long, oldLast As Long, listName As String
-    Set src = CandidateSource(customer)
-    If customer Then c = 27: listName = "InlineClients" Else c = 28: listName = "InlineProducts"
-    With WS(MAIN)
-        oldLast = .Cells(.Rows.count, c).End(xlUp).row
-        If oldLast >= 2 Then .Range(.Cells(2, c), .Cells(oldLast, c)).ClearContents
-    End With
-    n = LastRow(src, 2)
-    If n >= 2 Then
-        data = src.Range("A2:B" & n).Value2
-        For i = 1 To UBound(data, 1)
-            If Len(CStr(data(i, 1))) > 0 And Len(CStr(data(i, 2))) > 0 Then
-                If Matches(CStr(data(i, 2)) & " " & CStr(data(i, 1)), query) Then count = count + 1
-            End If
-        Next i
-        If count > 0 Then
-            ReDim result(1 To count, 1 To 1)
-            count = 0
-            For i = 1 To UBound(data, 1)
-                If Len(CStr(data(i, 1))) > 0 And Len(CStr(data(i, 2))) > 0 Then
-                    If Matches(CStr(data(i, 2)) & " " & CStr(data(i, 1)), query) Then
-                        count = count + 1
-                        result(count, 1) = Left$(CStr(data(i, 2)), 220) & " | " & CStr(data(i, 1))
-                    End If
-                End If
-            Next i
-            WS(MAIN).Cells(2, c).Resize(count, 1).Value2 = result
-        End If
+    EnsureSearchCache customer
+    If customer Then
+        BuildList = FilterSearchData(True, query, ClientCache, ClientCacheKeys)
+    Else
+        BuildList = FilterSearchData(False, query, ProductCache, ProductCacheKeys)
     End If
-    If count = 0 Then WS(MAIN).Cells(2, c).value = UI(5)
-    On Error Resume Next
-    ThisWorkbook.Names(listName).Delete
-    On Error GoTo 0
-    ThisWorkbook.Names.Add Name:=listName, RefersTo:="='" & Replace(WS(MAIN).Name, "'", "''") & "'!" & WS(MAIN).Cells(2, c).Resize(IIf(count > 0, count, 1), 1).address
-    WS(MAIN).Range("AA:AB").EntireColumn.Hidden = True
-    BuildList = count
 End Function
 
 Private Sub ShowList(ByVal dest As Range)
-    PendingNativeDropdown = dest.Address
+    PendingNativeDropdown = dest.address
     QueueEntry dest
 End Sub
 
@@ -830,6 +1290,7 @@ Private Sub ApplyChoice(ByVal dest As Range, ByVal sourceRow As Long)
     Dim customer As Boolean, src As Worksheet, r As Long
     customer = IsClientCell(dest)
     Set src = CandidateSource(customer)
+    RestoreSearchStatus
     If customer Then
         WS(MAIN).Range("A8").NumberFormat = "@"
         WS(MAIN).Range("A8").value = CStr(src.Cells(sourceRow, 1).Value2)
@@ -867,6 +1328,7 @@ Private Sub SearchChanged(ByVal dest As Range)
     customer = IsClientCell(dest)
     Set src = CandidateSource(customer)
     query = CellText(dest)
+    PendingNativeDropdown = ""
     If customer Then c = 27: listName = "InlineClients" Else c = 28: listName = "InlineProducts"
     If customer Then
         If dest.Column = 2 Then WS(MAIN).Range("A8").MergeArea.ClearContents Else WS(MAIN).Range("B8").MergeArea.ClearContents
@@ -876,6 +1338,7 @@ Private Sub SearchChanged(ByVal dest As Range)
         If dest.Column = 3 Then WS(MAIN).Cells(dest.row, 2).ClearContents Else WS(MAIN).Cells(dest.row, 3).MergeArea.ClearContents
     End If
     If Len(query) = 0 Then
+        RestoreSearchStatus
         BuildList customer, ""
         SetList dest, listName
         Exit Sub
@@ -892,22 +1355,27 @@ Private Sub SearchChanged(ByVal dest As Range)
     count = BuildList(customer, query)
     SetList dest, listName
     If count = 0 Then
-        UnicodeMessage UI(5), vbInformation
+        SearchStatus UI(5)
+        QueueEntry dest
     ElseIf count = 1 Then
         code = CStr(WS(MAIN).Cells(2, c).Value2)
         code = Mid$(code, InStrRev(code, " | ") + 3)
         found = CodeRow(src, code)
         If found > 0 Then ApplyChoice dest, found Else UnicodeMessage UI(8), vbExclamation
     Else
+        SearchStatus UI(75) & CStr(count)
         ShowList dest
     End If
 End Sub
 
 Private Sub StartSearch(ByVal dest As Range)
     Dim oldEvents As Boolean, customer As Boolean, listName As String
+    If ShowLookup(dest) Then Exit Sub
     oldEvents = Application.EnableEvents
     On Error GoTo Failed
     Application.EnableEvents = False
+    InvalidateSearchCaches
+    RestoreSearchStatus
     customer = IsClientCell(dest)
     If customer Then listName = "InlineClients" Else listName = "InlineProducts"
     BuildList customer, ""
@@ -922,7 +1390,7 @@ Failed:
 End Sub
 
 Public Sub SearchProducts()
-    If ActiveSheet.Name <> WS(MAIN).Name Then Exit Sub
+    If ActiveSheet.name <> WS(MAIN).name Then Exit Sub
     If ActiveCell.row >= FirstItemRow() And ActiveCell.row <= LastItemRow() And (ActiveCell.Column = 2 Or ActiveCell.Column = 3) Then
         StartSearch WS(MAIN).Cells(ActiveCell.row, 3)
     Else
@@ -931,18 +1399,18 @@ Public Sub SearchProducts()
 End Sub
 
 Public Sub SearchClients()
-    If ActiveSheet.Name = WS(MAIN).Name Then StartSearch WS(MAIN).Range("B8")
+    If ActiveSheet.name = WS(MAIN).name Then StartSearch WS(MAIN).Range("A8")
 End Sub
 
 Public Sub HandleChange(ByVal Sh As Object, ByVal target As Range)
     Dim oldEvents As Boolean, dest As Range, firstRow As Long, totalRow As Long
     Dim changed As Range, cell As Range, found As Long, customer As Boolean, src As Worksheet
     Dim query As String, splitAt As Long
-    If BusyPrinting Then Exit Sub
+    If BusyPrinting Or LookupUpdating Or LookupCompleting Then Exit Sub
     oldEvents = Application.EnableEvents
     On Error GoTo Failed
     Application.EnableEvents = False
-    If Sh.Name = WS(MAIN).Name Then
+    If Sh.name = WS(MAIN).name Then
         BeginEntryMode
         If Not Intersect(target, Sh.Range("B6")) Is Nothing Then
             RefreshDriver
@@ -957,7 +1425,7 @@ Public Sub HandleChange(ByVal Sh As Object, ByVal target As Range)
             If Len(CellText(Sh.Range("F6"))) > 0 Then
                 If IsNumeric(Sh.Range("F6").Value2) Then
                     If CDbl(Sh.Range("F6").Value2) > 0 And CDbl(Sh.Range("F6").Value2) <= CDbl(Date) Then
-                        QueueEntry Sh.Range("B8"), True
+                        QueueEntry Sh.Range("A8"), True
                     Else
                         UnicodeMessage UI(58), vbExclamation
                     End If
@@ -974,7 +1442,7 @@ Public Sub HandleChange(ByVal Sh As Object, ByVal target As Range)
             If target.CountLarge = 1 Or target.address = dest.MergeArea.address Then
                 SearchChanged dest
                 If ActiveWorkbook Is ThisWorkbook Then
-                    If ActiveSheet.Name = WS(MAIN).Name Then QueueEntry ActiveCell
+                    If ActiveSheet.name = WS(MAIN).name Then QueueEntry ActiveCell
                 End If
             Else
                 For Each cell In changed.Cells
@@ -999,32 +1467,32 @@ Public Sub HandleChange(ByVal Sh As Object, ByVal target As Range)
             End If
         End If
         RefreshTotals firstRow, totalRow
-        If target.CountLarge = 1 And dest.Row >= firstRow And dest.Row < totalRow Then
+        If target.CountLarge = 1 And dest.row >= firstRow And dest.row < totalRow Then
             If dest.Column >= 7 And dest.Column <= 9 Then
                 If Len(CellText(dest)) > 0 Then
-                    If Not IsNumeric(dest.Value2) Then UnicodeMessage UI(12) & " " & dest.Row, vbExclamation: QueueEntry dest: GoTo Done
-                    If CDbl(dest.Value2) < 0 Or CDbl(dest.Value2) <> Fix(CDbl(dest.Value2)) Then UnicodeMessage UI(12) & " " & dest.Row, vbExclamation: QueueEntry dest: GoTo Done
+                    If Not IsNumeric(dest.Value2) Then UnicodeMessage UI(12) & " " & dest.row, vbExclamation: QueueEntry dest: GoTo Done
+                    If CDbl(dest.Value2) < 0 Or CDbl(dest.Value2) <> Fix(CDbl(dest.Value2)) Then UnicodeMessage UI(12) & " " & dest.row, vbExclamation: QueueEntry dest: GoTo Done
                 End If
-                QueueEntry Sh.Cells(dest.Row, dest.Column + 1)
+                QueueEntry Sh.Cells(dest.row, dest.Column + 1)
             ElseIf dest.Column = 10 Then
                 If Len(CellText(dest)) > 0 Then
-                    If Not IsNumeric(dest.Value2) Then UnicodeMessage UI(57) & " " & dest.Row, vbExclamation: QueueEntry dest: GoTo Done
-                    If CDbl(dest.Value2) <= 0 Or CDbl(dest.Value2) > 2958465 Then UnicodeMessage UI(57) & " " & dest.Row, vbExclamation: QueueEntry dest: GoTo Done
+                    If Not IsNumeric(dest.Value2) Then UnicodeMessage UI(57) & " " & dest.row, vbExclamation: QueueEntry dest: GoTo Done
+                    If CDbl(dest.Value2) <= 0 Or CDbl(dest.Value2) > 2958465 Then UnicodeMessage UI(57) & " " & dest.row, vbExclamation: QueueEntry dest: GoTo Done
                 End If
-                QueueEntry Sh.Cells(dest.Row, 12)
+                QueueEntry Sh.Cells(dest.row, 12)
             ElseIf dest.Column = 12 Then
-                QueueEntry Sh.Cells(dest.Row, 13)
+                QueueEntry Sh.Cells(dest.row, 13)
             ElseIf dest.Column = 13 Then
-                If dest.Row < totalRow - 1 Then
-                    QueueEntry Sh.Cells(dest.Row + 1, 3), True
+                If dest.row < totalRow - 1 Then
+                    QueueEntry Sh.Cells(dest.row + 1, 3), True
                 Else
                     QueueEntry Sh.Range("L6")
                 End If
             End If
         End If
-    ElseIf Sh.Name = WS(DRIVERS).Name Then
+    ElseIf Sh.name = WS(DRIVERS).name Then
         RefreshDriver
-    ElseIf Sh.Name = WS(SETTINGS).Name Then
+    ElseIf Sh.name = WS(SETTINGS).name Then
         If Not Intersect(target, Sh.Range("A2:B5")) Is Nothing Then
             If Not RulesValid() Then UnicodeMessage UI(66), vbExclamation: GoTo Done
             WS(MAIN).Range("K11:K32").FormulaR1C1 = WarehouseFormula()
@@ -1032,7 +1500,8 @@ Public Sub HandleChange(ByVal Sh As Object, ByVal target As Range)
             ColorStatuses firstRow, totalRow
             WS(MAIN).Calculate
         End If
-    ElseIf Sh.Name = WS(CLIENTS).Name Or Sh.Name = WS(PRODUCTS).Name Then
+    ElseIf Sh.name = WS(CLIENTS).name Or Sh.name = WS(PRODUCTS).name Then
+        InvalidateSearchCaches
         FillNames
         BuildList True, ""
         BuildList False, ""
@@ -1048,7 +1517,7 @@ Failed:
 End Sub
 
 Public Sub HandleDoubleClick(ByVal Sh As Object, ByVal target As Range, ByRef Cancel As Boolean)
-    If Sh.Name = WS(MAIN).Name Then
+    If Sh.name = WS(MAIN).name Then
         If Not Intersect(target, Sh.Range("L6").MergeArea) Is Nothing Then
             Cancel = True
             ArchiveAndPrint
@@ -1062,12 +1531,12 @@ Public Sub HandleDoubleClick(ByVal Sh As Object, ByVal target As Range, ByRef Ca
             Cancel = True
             StartSearch WS(MAIN).Cells(target.row, 3)
         End If
-    ElseIf IsSavedReceiptSheet(Sh.Name) Then
+    ElseIf IsSavedReceiptSheet(Sh.name) Then
         If Not Intersect(target, Sh.Range("J11:K11")) Is Nothing Then
             Cancel = True
-            ReprintSavedSheet Sh.Name
+            ReprintSavedSheet Sh.name
         End If
-    ElseIf Sh.Name = "Archive" Then
+    ElseIf Sh.name = "Archive" Then
         If target.row >= 5 And target.Column = 9 Then
             Cancel = True
             ReprintArchive
@@ -1080,8 +1549,12 @@ Public Sub Initialize()
     oldEvents = Application.EnableEvents
     On Error GoTo Failed
     Application.EnableEvents = False
+    ReleaseLookup
+    LookupDisabled = False
+    InvalidateSearchCaches
+    RestoreSearchStatus
     BeginEntryMode
-    ThisWorkbook.Names.Add Name:="ReturnReasons", RefersTo:="='" & Replace(WS(SETTINGS).Name, "'", "''") & "'!$C$2:$C$7"
+    ThisWorkbook.Names.Add name:="ReturnReasons", RefersTo:="='" & Replace(WS(SETTINGS).name, "'", "''") & "'!$C$2:$C$7"
     If Not RulesValid() Then Err.Raise vbObjectError + 941, "Initialize", UI(66)
     RefreshDriver
     FormRows firstRow, totalRow
@@ -1089,7 +1562,7 @@ Public Sub Initialize()
     RefreshTotals firstRow, totalRow
     FitReceiptPage WS(MAIN)
     WS(SETTINGS).Range("E2").value = NextNumber()
-    WS(MAIN).Range("L8").Formula = "=""#""&'" & Replace(WS(SETTINGS).Name, "'", "''") & "'!$E$2"
+    WS(MAIN).Range("L8").Formula = "=""#""&'" & Replace(WS(SETTINGS).name, "'", "''") & "'!$E$2"
     FillNames
     BuildList True, ""
     BuildList False, ""
@@ -1122,8 +1595,8 @@ Private Function NextNumber() As Long
         If CDbl(WS(SETTINGS).Range("E2").value) >= 1 Then n = CLng(WS(SETTINGS).Range("E2").value)
     End If
     For Each Sh In ThisWorkbook.Worksheets
-        If Left$(Sh.Name, 4) = "RET_" Then
-            suffix = Mid$(Sh.Name, 5)
+        If Left$(Sh.name, 4) = "RET_" Then
+            suffix = Mid$(Sh.name, 5)
             If IsNumeric(suffix) Then
                 If CLng(suffix) >= n Then n = CLng(suffix) + 1
             End If
@@ -1185,7 +1658,7 @@ End Function
 
 Private Function ReceiptFileName(ByVal number As Long) As String
     Dim baseName As String, suffix As String, bad As Variant, i As Long
-    baseName = ThisWorkbook.Name
+    baseName = ThisWorkbook.name
     If InStrRev(baseName, ".") > 0 Then suffix = LCase$(Mid$(baseName, InStrRev(baseName, ".")))
     If suffix = ".xlsm" Or suffix = ".xlsx" Or suffix = ".xlsb" Or suffix = ".xls" Then baseName = Left$(baseName, InStrRev(baseName, ".") - 1)
     For Each bad In Array("\", "/", ":", "*", "?", Chr$(34), "<", ">", "|")
@@ -1246,7 +1719,7 @@ Private Sub PrepareReceiptCopy(ByVal number As Long, ByVal totalRow As Long, ByR
     receipt.Range("AA:AB").ClearContents
     receipt.Range(address).Validation.Delete
     For i = receipt.Shapes.count To 1 Step -1
-        If Left$(receipt.Shapes(i).Name, 4) = "btn_" Or receipt.Shapes(i).Type = msoFormControl Then receipt.Shapes(i).Delete
+        If Left$(receipt.Shapes(i).name, 4) = "btn_" Or receipt.Shapes(i).name = "cmbLiveSearch" Or receipt.Shapes(i).Type = msoFormControl Then receipt.Shapes(i).Delete
     Next i
     FitReceiptPage receipt
 End Sub
@@ -1279,7 +1752,7 @@ End Sub
 Private Sub KeepReceipt(ByVal receipt As Worksheet, ByVal number As Long, ByRef saved As Worksheet)
     receipt.Copy After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.count)
     Set saved = ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.count)
-    saved.Name = "RET_" & Format$(number, "000000")
+    saved.name = "RET_" & Format$(number, "000000")
     saved.Protect DrawingObjects:=True, Contents:=True, Scenarios:=True
 End Sub
 
@@ -1292,6 +1765,7 @@ Public Sub ArchiveAndPrint()
     Dim copiesRequested As Variant, copyCount As Long, returnBackup As Variant, invoiceBackup As Variant, driverBackup As Variant
     Dim backupReady As Boolean, resetStarted As Boolean, pdfSaved As Boolean, committed As Boolean
     If BusyPrinting Then Exit Sub
+    If Not LookupReadyForPrint() Then Exit Sub
     oldEvents = Application.EnableEvents
     oldScreen = Application.ScreenUpdating
     On Error GoTo Failed
@@ -1352,7 +1826,7 @@ Public Sub ArchiveAndPrint()
         Application.CutCopyMode = False
     End If
     log.Cells(logRow, 1).Value2 = number
-    log.Hyperlinks.Add Anchor:=log.Cells(logRow, 1), address:="", SubAddress:="'" & saved.Name & "'!A1", TextToDisplay:=CStr(number)
+    log.Hyperlinks.Add Anchor:=log.Cells(logRow, 1), address:="", SubAddress:="'" & saved.name & "'!A1", TextToDisplay:=CStr(number)
     log.Cells(logRow, 2).value = Now
     log.Cells(logRow, 2).NumberFormat = "yyyy-mm-dd hh:mm"
     log.Cells(logRow, 3).NumberFormat = "@"
@@ -1500,7 +1974,7 @@ End Sub
 Public Sub ReprintArchive()
     Dim log As Worksheet
     Set log = ThisWorkbook.Worksheets("Archive")
-    If ActiveSheet.Name <> log.Name Or ActiveCell.row < 5 Then UnicodeMessage UI(25), vbInformation: Exit Sub
+    If ActiveSheet.name <> log.name Or ActiveCell.row < 5 Then UnicodeMessage UI(25), vbInformation: Exit Sub
     OpenLogPDF ActiveCell.row
 End Sub
 
