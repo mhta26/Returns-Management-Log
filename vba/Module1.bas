@@ -407,7 +407,7 @@ Public Sub HandleSelection(ByVal Sh As Object, ByVal target As Range)
             GoTo Done
         ElseIf LastEntryColumn = 13 And cell.Column = 14 Then
             If cell.Row < totalRow - 1 Then
-                Sh.Cells(cell.Row + 1, 2).Select
+                Sh.Cells(cell.Row + 1, 3).Select
             Else
                 Sh.Range("L6").Select
             End If
@@ -792,7 +792,7 @@ Private Sub ApplyChoice(ByVal dest As Range, ByVal sourceRow As Long)
     End If
     BuildList customer, ""
     WS(MAIN).Calculate
-    If customer Then WS(MAIN).Cells(FirstItemRow(), 2).Select
+    If customer Then WS(MAIN).Cells(FirstItemRow(), 3).Select
 End Sub
 
 Private Sub SearchChanged(ByVal dest As Range)
@@ -891,7 +891,7 @@ Public Sub HandleChange(ByVal Sh As Object, ByVal target As Range)
             If Len(CellText(Sh.Range("F6"))) > 0 Then
                 If IsNumeric(Sh.Range("F6").Value2) Then
                     If CDbl(Sh.Range("F6").Value2) > 0 And CDbl(Sh.Range("F6").Value2) <= CDbl(Date) Then
-                        QueueEntry Sh.Range("A8"), True
+                        QueueEntry Sh.Range("B8"), True
                     Else
                         UnicodeMessage UI(58), vbExclamation
                     End If
@@ -950,7 +950,7 @@ Public Sub HandleChange(ByVal Sh As Object, ByVal target As Range)
                 QueueEntry Sh.Cells(dest.Row, 13)
             ElseIf dest.Column = 13 Then
                 If dest.Row < totalRow - 1 Then
-                    QueueEntry Sh.Cells(dest.Row + 1, 2), True
+                    QueueEntry Sh.Cells(dest.Row + 1, 3), True
                 Else
                     QueueEntry Sh.Range("L6")
                 End If
