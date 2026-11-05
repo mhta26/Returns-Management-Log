@@ -4,7 +4,9 @@ Public BusyPrinting As Boolean
 Private Const MAIN As Long = 1
 Private Const CLIENTS As Long = 2
 Private Const PRODUCTS As Long = 3
-Private Const SETTINGS As Long = 4
+Private Const SETTINGS As Long = 5
+Private Const DRIVERS As Long = 4
+Public BusySearching As Boolean
 
 #If VBA7 Then
 Private Declare PtrSafe Function MessageBoxW Lib "user32" (ByVal hwnd As LongPtr, ByVal text As LongPtr, ByVal caption As LongPtr, ByVal flags As Long) As Long
@@ -15,6 +17,63 @@ Private Declare Function MessageBoxW Lib "user32" (ByVal hwnd As Long, ByVal tex
 Private Declare Function GetFileAttributesW Lib "kernel32" (ByVal path As Long) As Long
 Private Declare Function ShellExecuteW Lib "shell32" (ByVal hwnd As Long, ByVal operation As Long, ByVal file As Long, ByVal parameters As Long, ByVal directory As Long, ByVal show As Long) As Long
 #End If
+
+Private Type LiveWindowClass
+    cbSize As Long
+    style As Long
+    proc As LongPtr
+    extraClass As Long
+    extraWindow As Long
+    instance As LongPtr
+    icon As LongPtr
+    cursor As LongPtr
+    background As LongPtr
+    menu As LongPtr
+    className As LongPtr
+    smallIcon As LongPtr
+End Type
+Private Type LiveMessage
+    hwnd As LongPtr
+    message As Long
+#If Win64 Then
+    padding As Long
+#End If
+    wParam As LongPtr
+    lParam As LongPtr
+    time As Long
+    x As Long
+    y As Long
+    privateData As Long
+End Type
+Private Type LiveRectangle
+    left As Long
+    top As Long
+    right As Long
+    bottom As Long
+End Type
+Private Declare PtrSafe Function LiveRegister Lib "user32" Alias "RegisterClassExW" (ByRef value As LiveWindowClass) As Integer
+Private Declare PtrSafe Function LiveUnregister Lib "user32" Alias "UnregisterClassW" (ByVal name As LongPtr, ByVal instance As LongPtr) As Long
+Private Declare PtrSafe Function LiveCreate Lib "user32" Alias "CreateWindowExW" (ByVal extended As Long, ByVal classPtr As LongPtr, ByVal title As LongPtr, ByVal style As Long, ByVal x As Long, ByVal y As Long, ByVal width As Long, ByVal height As Long, ByVal parent As LongPtr, ByVal menu As LongPtr, ByVal instance As LongPtr, ByVal parameter As LongPtr) As LongPtr
+Private Declare PtrSafe Function LiveDefault Lib "user32" Alias "DefWindowProcW" (ByVal hwnd As LongPtr, ByVal message As Long, ByVal wParam As LongPtr, ByVal lParam As LongPtr) As LongPtr
+Private Declare PtrSafe Function LiveSend Lib "user32" Alias "SendMessageW" (ByVal hwnd As LongPtr, ByVal message As Long, ByVal wParam As LongPtr, ByVal lParam As LongPtr) As LongPtr
+Private Declare PtrSafe Function LiveGetMessage Lib "user32" Alias "GetMessageW" (ByRef message As LiveMessage, ByVal hwnd As LongPtr, ByVal first As Long, ByVal last As Long) As Long
+Private Declare PtrSafe Function LiveTranslate Lib "user32" Alias "TranslateMessage" (ByRef message As LiveMessage) As Long
+Private Declare PtrSafe Function LiveDispatch Lib "user32" Alias "DispatchMessageW" (ByRef message As LiveMessage) As LongPtr
+Private Declare PtrSafe Function LiveDestroy Lib "user32" Alias "DestroyWindow" (ByVal hwnd As LongPtr) As Long
+Private Declare PtrSafe Function LiveEnable Lib "user32" Alias "EnableWindow" (ByVal hwnd As LongPtr, ByVal enabled As Long) As Long
+Private Declare PtrSafe Function LiveFocus Lib "user32" Alias "SetFocus" (ByVal hwnd As LongPtr) As LongPtr
+Private Declare PtrSafe Function LiveForeground Lib "user32" Alias "SetForegroundWindow" (ByVal hwnd As LongPtr) As Long
+Private Declare PtrSafe Function LiveRectangleOf Lib "user32" Alias "GetWindowRect" (ByVal hwnd As LongPtr, ByRef rectangle As LiveRectangle) As Long
+Private Declare PtrSafe Function LiveTextLength Lib "user32" Alias "GetWindowTextLengthW" (ByVal hwnd As LongPtr) As Long
+Private Declare PtrSafe Function LiveReadText Lib "user32" Alias "GetWindowTextW" (ByVal hwnd As LongPtr, ByVal text As LongPtr, ByVal count As Long) As Long
+Private Declare PtrSafe Function LiveWriteText Lib "user32" Alias "SetWindowTextW" (ByVal hwnd As LongPtr, ByVal text As LongPtr) As Long
+Private Declare PtrSafe Function LiveInstance Lib "kernel32" Alias "GetModuleHandleW" (ByVal name As LongPtr) As LongPtr
+Private Declare PtrSafe Function LiveFont Lib "gdi32" Alias "GetStockObject" (ByVal index As Long) As LongPtr
+Private Declare PtrSafe Function LiveCursor Lib "user32" Alias "LoadCursorW" (ByVal instance As LongPtr, ByVal name As LongPtr) As LongPtr
+Private LiveWindow As LongPtr, LiveEdit As LongPtr, LiveList As LongPtr, LiveCount As LongPtr
+Private LiveFinished As Boolean, LiveChosen As Long, LiveFailure As String
+Private LiveData As Variant, LiveHaystack() As String, LiveRows() As Long
+Private Declare PtrSafe Function LiveInvalidate Lib "user32" Alias "InvalidateRect" (ByVal hwnd As LongPtr, ByVal rectangle As LongPtr, ByVal erase As Long) As Long
 
 Private Function UnicodeMessage(ByVal prompt As String, Optional ByVal buttons As Long = 0) As Long
     Dim title As String
@@ -36,7 +95,21 @@ End Sub
 
 
 Private Function WS(ByVal n As Long) As Worksheet
-    Set WS = ThisWorkbook.Worksheets(n)
+    Dim sheet As Worksheet, expected As String
+    Select Case n
+    Case MAIN: expected = "Sheet1"
+    Case CLIENTS: expected = "Sheet2"
+    Case PRODUCTS: expected = "Sheet3"
+    Case SETTINGS: expected = "Sheet4"
+    Case DRIVERS
+        For Each sheet In ThisWorkbook.Worksheets
+            If sheet.Name = DriverSheetName() Then Set WS = sheet: Exit Function
+        Next sheet
+    End Select
+    For Each sheet In ThisWorkbook.Worksheets
+        If sheet.CodeName = expected Then Set WS = sheet: Exit Function
+    Next sheet
+    Err.Raise vbObjectError + 940, "WS", "Required worksheet is missing."
 End Function
 
 Private Function DecodeText(ByVal encoded As String) As String
@@ -47,6 +120,22 @@ Private Function DecodeText(ByVal encoded As String) As String
 End Function
 
 Private Function UI(ByVal n As Long) As String
+    If n = 37 Then UI = WarehouseFormula(): Exit Function
+    If n >= 62 And n <= 65 Then UI = Trim$(CStr(WS(SETTINGS).Cells(n - 60, 2).Value2)): Exit Function
+    If n = 66 Then UI = DecodeText("0631 0627 062C 0639 0020 0642 0648 0627 0639 062F 0020 0627 0644 0645 062E 0627 0632 0646 003A 0020 062B 0644 0627 062B 0629 0020 062D 062F 0648 062F " & _
+            "0020 0623 064A 0627 0645 0020 0635 062D 064A 062D 0629 0020 0645 062A 0632 0627 064A 062F 0629 0020 0648 0623 0631 0628 0639 0629 0020 0623 0633 0645 " & _
+            "0627 0621 0020 0645 062E 062A 0644 0641 0629 0020 063A 064A 0631 0020 0641 0627 0631 063A 0629 002E"): Exit Function
+    If n = 67 Then UI = DecodeText("062A 0627 0631 064A 062E 0020 063A 064A 0631 0020 0635 062D 064A 062D"): Exit Function
+    If n = 68 Then UI = DecodeText("0627 062E 062A 0631 0020 0631 0642 0645 0020 0633 0627 0626 0642 0020 0635 062D 064A 062D 064B 0627 0020 0645 0646 0020 0642 0627 0639 062F 0629 0020 " & _
+            "0627 0644 0633 0627 0626 0642 064A 0646 002E"): Exit Function
+    If n = 69 Then UI = DecodeText("0623 062F 062E 0644 0020 0631 0642 0645 0020 0627 0644 0625 0631 062C 0627 0639 0020 0623 0648 0644 064B 0627 002E"): Exit Function
+    If n = 70 Then UI = DecodeText("0623 062F 062E 0644 0020 062A 0627 0631 064A 062E 0020 0627 0644 0641 0627 062A 0648 0631 0629 0020 0623 0648 0644 064B 0627 002E"): Exit Function
+    If n = 71 Then UI = DecodeText("0628 062D 062B 0020 0627 0644 0639 0645 064A 0644 0020 2014 0020 0627 0643 062A 0628 0020 0627 0644 0627 0633 0645 0020 0623 0648 0020 0627 0644 0643 " & _
+            "0648 062F"): Exit Function
+    If n = 72 Then UI = DecodeText("0628 062D 062B 0020 0627 0644 0635 0646 0641 0020 2014 0020 0627 0643 062A 0628 0020 0627 0644 0627 0633 0645 0020 0623 0648 0020 0627 0644 0643 0648 " & _
+            "062F"): Exit Function
+    If n = 73 Then UI = DecodeText("0627 062E 062A 064A 0627 0631"): Exit Function
+    If n = 74 Then UI = DecodeText("0625 0644 063A 0627 0621"): Exit Function
     UI = CStr(WS(SETTINGS).Cells(n, 8).value)
     If Len(UI) > 0 Then Exit Function
     Select Case n
@@ -228,6 +317,245 @@ Private Function UI(ByVal n As Long) As String
     End Select
 End Function
 
+Private Function DriverSheetName() As String
+    DriverSheetName = DecodeText("0642 0627 0639 062F 0629 0020 0627 0644 0633 0627 0626 0642 064A 0646")
+End Function
+
+Private Function WarehouseFormula() As String
+    Dim s As String, d As String, remain As String, bad As String, quote As String
+    quote = Chr$(34)
+    s = "'" & Replace(WS(SETTINGS).Name, "'", "''") & "'!"
+    d = "RC[-1]": remain = "INT(" & d & ")-INT(R6C9)"
+    bad = quote & UI(67) & quote
+    WarehouseFormula = "=IF(" & d & "=" & quote & quote & "," & quote & quote & ",IFERROR(IF(OR(NOT(ISNUMBER(" & d & "))," & d & "<=0," & d & ">2958465)," & bad & ",IF(" & remain & "<=VALUE(" & s & "R2C1),TRIM(" & s & "R2C2),IF(" & remain & "<=VALUE(" & s & "R3C1),TRIM(" & s & "R3C2),IF(" & remain & "<=VALUE(" & s & "R4C1),TRIM(" & s & "R4C2),TRIM(" & s & "R5C2)))))," & bad & "))"
+End Function
+
+Private Function RulesValid() As Boolean
+    Dim i As Long, j As Long, value As Variant, previous As Double, label As String
+    previous = -1
+    For i = 2 To 4
+        value = WS(SETTINGS).Cells(i, 1).Value2
+        If Not IsNumeric(value) Then Exit Function
+        If CDbl(value) <> Fix(CDbl(value)) Or CDbl(value) <= previous Then Exit Function
+        previous = CDbl(value)
+    Next i
+    For i = 2 To 5
+        label = Trim$(CellText(WS(SETTINGS).Cells(i, 2)))
+        If Len(label) = 0 Then Exit Function
+        For j = 2 To i - 1
+            If StrComp(label, Trim$(CellText(WS(SETTINGS).Cells(j, 2))), vbTextCompare) = 0 Then Exit Function
+        Next j
+    Next i
+    RulesValid = True
+End Function
+
+Private Function DriverValid() As Boolean
+    DriverValid = (CodeRow(WS(DRIVERS), CellText(WS(MAIN).Range("B6"))) > 0)
+End Function
+
+Private Sub RefreshDriver()
+    Dim found As Long
+    found = CodeRow(WS(DRIVERS), CellText(WS(MAIN).Range("B6")))
+    If found > 0 Then
+        If CStr(WS(MAIN).Range("B6").Value2) <> CStr(WS(DRIVERS).Cells(found, 1).Value2) Then
+            WS(MAIN).Range("B6").NumberFormat = "@"
+            WS(MAIN).Range("B6").Value2 = CStr(WS(DRIVERS).Cells(found, 1).Value2)
+        End If
+    End If
+    WS(MAIN).Range("L35").Formula = DriverFormula()
+    WS(MAIN).Range("L35").Calculate
+End Sub
+
+Private Function DriverFormula() As String
+    Dim name As String, quote As String
+    quote = Chr$(34)
+    name = "'" & Replace(WS(DRIVERS).Name, "'", "''") & "'!$A:$B"
+    DriverFormula = "=IF(B6=" & quote & quote & "," & quote & quote & ",IFERROR(VLOOKUP(B6&" & quote & quote & "," & name & ",2,FALSE),IFERROR(VLOOKUP(IFERROR(VALUE(B6),B6)," & name & ",2,FALSE)," & quote & quote & ")))"
+End Function
+
+Private Function ReceiptWarehouses(ByVal firstRow As Long, ByVal totalRow As Long) As String
+    Dim r As Long, name As String, seen As Object
+    Set seen = CreateObject("Scripting.Dictionary")
+    For r = firstRow To totalRow - 1
+        If Len(CellText(WS(MAIN).Cells(r, 2))) > 0 Then
+            name = CellText(WS(MAIN).Cells(r, 11))
+            If Len(name) > 0 And Not seen.Exists(name) Then
+                seen.Add name, True
+                If Len(ReceiptWarehouses) > 0 Then ReceiptWarehouses = ReceiptWarehouses & " | "
+                ReceiptWarehouses = ReceiptWarehouses & name
+            End If
+        End If
+    Next r
+End Function
+
+Public Sub HandleSelection(ByVal Sh As Object, ByVal target As Range)
+    Dim cell As Range
+    If BusyPrinting Or BusySearching Then Exit Sub
+    If Sh.Name <> WS(MAIN).Name Then Exit Sub
+    Set cell = target.Cells(1, 1).MergeArea.Cells(1, 1)
+    If target.CountLarge > 1 And target.Address <> cell.MergeArea.Address Then Exit Sub
+    If Intersect(cell, SearchInputCells()) Is Nothing Then Exit Sub
+    BusySearching = True
+    On Error GoTo Done
+    StartSearch cell
+Done:
+    BusySearching = False
+End Sub
+
+Private Function LiveCallbackAddress(ByVal value As LongPtr) As LongPtr
+    LiveCallbackAddress = value
+End Function
+
+Private Function LiveControl(ByVal className As String, ByVal title As String, ByVal style As Long, ByVal x As Long, ByVal y As Long, ByVal width As Long, ByVal height As Long, ByVal id As Long) As LongPtr
+    LiveControl = LiveCreate(0, StrPtr(className), StrPtr(title), style, x, y, width, height, LiveWindow, id, LiveInstance(0), 0)
+    If LiveControl = 0 Then Err.Raise vbObjectError + 951, "LiveControl", "Cannot create search control."
+    LiveSend LiveControl, &H30, LiveFont(17), 1
+End Function
+
+Private Sub LiveFilter()
+    Dim query As String, buffer As String, length As Long, tokens As Variant, token As Variant
+    Dim i As Long, count As Long, matches As Boolean, label As String
+    If LiveEdit = 0 Or LiveList = 0 Then Exit Sub
+    length = LiveTextLength(LiveEdit)
+    buffer = String$(length + 1, vbNullChar)
+    LiveReadText LiveEdit, StrPtr(buffer), length + 1
+    query = Normal(Left$(buffer, length))
+    tokens = Split(query, " ")
+    LiveSend LiveList, &HB, 0, 0
+    LiveSend LiveList, &H184, 0, 0
+    ReDim LiveRows(0 To UBound(LiveData, 1) - 1)
+    For i = 1 To UBound(LiveData, 1)
+        If Len(CStr(LiveData(i, 1))) > 0 And Len(CStr(LiveData(i, 2))) > 0 Then
+            matches = True
+            For Each token In tokens
+                If Len(token) > 0 Then
+                    If InStr(1, LiveHaystack(i), CStr(token), vbBinaryCompare) = 0 Then matches = False: Exit For
+                End If
+            Next token
+            If matches Then
+                label = CStr(LiveData(i, 1)) & " | " & CStr(LiveData(i, 2))
+                LiveSend LiveList, &H180, 0, StrPtr(label)
+                LiveRows(count) = i + 1
+                count = count + 1
+            End If
+        End If
+    Next i
+    If count > 0 Then LiveSend LiveList, &H186, 0, 0
+    LiveSend LiveList, &HB, 1, 0
+    LiveInvalidate LiveList, 0, 1
+    label = CStr(count)
+    LiveWriteText LiveCount, StrPtr(label)
+End Sub
+
+Private Sub LiveConfirm()
+    Dim selected As Long
+    selected = CLng(LiveSend(LiveList, &H188, 0, 0))
+    If selected >= 0 Then
+        LiveChosen = LiveRows(selected)
+        LiveFinished = True
+    End If
+End Sub
+
+Public Function LiveWindowProc(ByVal hwnd As LongPtr, ByVal message As Long, ByVal wParam As LongPtr, ByVal lParam As LongPtr) As LongPtr
+    Dim control As Long, notification As Long
+    On Error GoTo Failed
+    If message = &H10 Then
+        LiveFinished = True
+        Exit Function
+    ElseIf message = &H111 Then
+        control = CLng(wParam And &HFFFF&)
+        notification = (CLng(wParam) And &H7FFF0000) \ &H10000
+        If control = 1001 And notification = &H300 Then LiveFilter
+        If control = 1002 And notification = 2 Then LiveConfirm
+        If control = 1003 Then LiveConfirm
+        If control = 1004 Then LiveFinished = True
+        Exit Function
+    End If
+    LiveWindowProc = LiveDefault(hwnd, message, wParam, lParam)
+    Exit Function
+Failed:
+    LiveFailure = Err.Description
+    LiveFinished = True
+End Function
+
+Private Function LiveLookup(ByVal customer As Boolean, ByVal seed As String) As Long
+    Dim wc As LiveWindowClass, message As LiveMessage, rectangle As LiveRectangle, instance As LongPtr
+    Dim className As String, title As String, i As Long, source As Worksheet, registered As Boolean, disabled As Boolean
+    Dim button As LongPtr, parentWindow As LongPtr, errorNumber As Long, errorText As String, status As Long
+    On Error GoTo Failed
+    parentWindow = Application.hwnd
+    Set source = CandidateSource(customer)
+    If LastRow(source, 2) < 2 Then Exit Function
+    LiveData = source.Range("A2:B" & LastRow(source, 2)).Value2
+    ReDim LiveHaystack(1 To UBound(LiveData, 1))
+    For i = 1 To UBound(LiveData, 1)
+        If IsError(LiveData(i, 1)) Or IsError(LiveData(i, 2)) Then
+            LiveData(i, 1) = "": LiveData(i, 2) = ""
+        End If
+        LiveHaystack(i) = Normal(CStr(LiveData(i, 1)) & " " & CStr(LiveData(i, 2)))
+    Next i
+    LiveFinished = False: LiveChosen = 0: LiveFailure = ""
+    LiveWindow = 0: LiveEdit = 0: LiveList = 0: LiveCount = 0
+    className = "ReturnsLiveLookup"
+    instance = LiveInstance(0)
+    wc.cbSize = LenB(wc)
+    wc.proc = LiveCallbackAddress(AddressOf LiveWindowProc)
+    wc.instance = instance
+    wc.cursor = LiveCursor(0, 32512)
+    wc.background = 6
+    wc.className = StrPtr(className)
+    If LiveRegister(wc) = 0 Then Err.Raise vbObjectError + 952, "LiveLookup", "Cannot register search window."
+    registered = True
+    LiveRectangleOf parentWindow, rectangle
+    If customer Then title = UI(71) Else title = UI(72)
+    LiveWindow = LiveCreate(&H400000, StrPtr(className), StrPtr(title), &H10CA0000, rectangle.left + 100, rectangle.top + 100, 650, 430, parentWindow, 0, instance, 0)
+    If LiveWindow = 0 Then Err.Raise vbObjectError + 953, "LiveLookup", "Cannot create search window."
+    LiveEdit = LiveControl("EDIT", "", &H50810080, 15, 15, 600, 30, 1001)
+    LiveList = LiveControl("LISTBOX", "", &H50A10101, 15, 55, 600, 265, 1002)
+    LiveCount = LiveControl("STATIC", "", &H50000000, 15, 335, 100, 25, 1005)
+    button = LiveControl("BUTTON", UI(73), &H50010001, 375, 335, 115, 30, 1003)
+    button = LiveControl("BUTTON", UI(74), &H50010000, 500, 335, 115, 30, 1004)
+    LiveEnable parentWindow, 0
+    disabled = True
+    LiveWriteText LiveEdit, StrPtr(seed)
+    LiveFilter
+    LiveFocus LiveEdit
+    LiveSend LiveEdit, &HB1, 0, -1
+    Do While Not LiveFinished
+        status = LiveGetMessage(message, 0, 0, 0)
+        If status <= 0 Then Exit Do
+        If message.message = &H100 Then
+            If message.wParam = 13 Then
+                LiveConfirm
+                GoTo NextMessage
+            ElseIf message.wParam = 27 Then
+                LiveFinished = True
+                GoTo NextMessage
+            ElseIf message.wParam = 40 And message.hwnd = LiveEdit Then
+                LiveFocus LiveList
+                GoTo NextMessage
+            End If
+        End If
+        LiveTranslate message
+        LiveDispatch message
+NextMessage:
+    Loop
+    If Len(LiveFailure) > 0 Then Err.Raise vbObjectError + 954, "LiveLookup", LiveFailure
+    LiveLookup = LiveChosen
+Cleanup:
+    If disabled Then LiveEnable parentWindow, 1
+    If LiveWindow <> 0 Then LiveDestroy LiveWindow
+    LiveWindow = 0: LiveEdit = 0: LiveList = 0: LiveCount = 0
+    If registered Then LiveUnregister StrPtr(className), instance
+    LiveForeground parentWindow
+    If errorNumber <> 0 Then Err.Raise errorNumber, "LiveLookup", errorText
+    Exit Function
+Failed:
+    errorNumber = Err.Number
+    errorText = Err.Description
+    Resume Cleanup
+End Function
+
 Private Function LastRow(ByVal Sh As Worksheet, ByVal cols As Long) As Long
     Dim c As Long, r As Long
     LastRow = 1
@@ -240,6 +568,10 @@ End Function
 Private Function Normal(ByVal s As String) As String
     Dim i As Long
     s = LCase$(Trim$(s))
+    For i = 0 To 9
+        s = Replace(s, ChrW(&H660 + i), Chr$(48 + i))
+        s = Replace(s, ChrW(&H6F0 + i), Chr$(48 + i))
+    Next i
     s = Replace(s, ChrW(1571), ChrW(1575))
     s = Replace(s, ChrW(1573), ChrW(1575))
     s = Replace(s, ChrW(1570), ChrW(1575))
@@ -267,7 +599,7 @@ Private Function CodeRow(ByVal src As Worksheet, ByVal code As String) As Long
     Dim r As Long, found As Long
     If Len(code) = 0 Then Exit Function
     For r = 2 To LastRow(src, 2)
-        If CStr(src.Cells(r, 1).Value2) = code And Len(CStr(src.Cells(r, 2).Value2)) > 0 Then
+        If Normal(CStr(src.Cells(r, 1).Value2)) = Normal(code) And Len(CStr(src.Cells(r, 2).Value2)) > 0 Then
             If found > 0 Then CodeRow = -1: Exit Function
             found = r
         End If
@@ -423,6 +755,7 @@ Private Sub RefreshTotals(ByVal firstRow As Long, ByVal totalRow As Long)
     oldEvents = Application.EnableEvents
     On Error GoTo Failed
     Application.EnableEvents = False
+    If Not RulesValid() Then Err.Raise vbObjectError + 941, "RefreshTotals", UI(66)
     WS(MAIN).Range("I6").Formula = "=NOW()"
     EnsureItemRows firstRow, totalRow
     For c = 7 To 9
@@ -529,8 +862,7 @@ Private Function BuildList(ByVal customer As Boolean, ByVal query As String) As 
 End Function
 
 Private Sub ShowList(ByVal dest As Range)
-    dest.Select
-    If ActiveSheet.Name = WS(MAIN).Name Then Application.SendKeys "%{DOWN}", False
+    StartSearch dest
 End Sub
 
 Private Sub FillNames()
@@ -579,6 +911,7 @@ Private Sub ApplyChoice(ByVal dest As Range, ByVal sourceRow As Long)
     End If
     BuildList customer, ""
     WS(MAIN).Calculate
+    If customer Then StartSearch WS(MAIN).Cells(FirstItemRow(), 2)
 End Sub
 
 Private Sub SearchChanged(ByVal dest As Range)
@@ -624,15 +957,20 @@ Private Sub SearchChanged(ByVal dest As Range)
 End Sub
 
 Private Sub StartSearch(ByVal dest As Range)
-    Dim oldEvents As Boolean, listName As String, customer As Boolean
+    Dim oldEvents As Boolean, customer As Boolean, selected As Long
     oldEvents = Application.EnableEvents
     On Error GoTo Failed
     Application.EnableEvents = False
     customer = IsClientCell(dest)
-    If customer Then listName = "InlineClients" Else listName = "InlineProducts"
-    BuildList customer, ""
-    SetList dest, listName
-    ShowList dest
+    dest.Select
+    selected = LiveLookup(customer, CellText(dest))
+    If selected > 0 Then
+        If CodeRow(CandidateSource(customer), CStr(CandidateSource(customer).Cells(selected, 1).Value2)) <> selected Then
+            UnicodeMessage UI(8), vbExclamation
+        Else
+            ApplyChoice dest, selected
+        End If
+    End If
 Done:
     Application.EnableEvents = oldEvents
     Exit Sub
@@ -663,6 +1001,29 @@ Public Sub HandleChange(ByVal Sh As Object, ByVal target As Range)
     On Error GoTo Failed
     Application.EnableEvents = False
     If Sh.Name = WS(MAIN).Name Then
+        If Not Intersect(target, Sh.Range("B6")) Is Nothing Then
+            RefreshDriver
+            If Len(CellText(Sh.Range("B6"))) > 0 Then
+                If DriverValid() Then Sh.Range("D6").Select Else UnicodeMessage UI(68), vbExclamation
+            End If
+            GoTo Done
+        ElseIf Not Intersect(target, Sh.Range("D6")) Is Nothing Then
+            If Len(CellText(Sh.Range("D6"))) > 0 Then Sh.Range("F6").Select
+            GoTo Done
+        ElseIf Not Intersect(target, Sh.Range("F6")) Is Nothing Then
+            If Len(CellText(Sh.Range("F6"))) > 0 Then
+                If IsNumeric(Sh.Range("F6").Value2) Then
+                    If CDbl(Sh.Range("F6").Value2) > 0 And CDbl(Sh.Range("F6").Value2) <= CDbl(Date) Then
+                        StartSearch Sh.Range("A8")
+                    Else
+                        UnicodeMessage UI(58), vbExclamation
+                    End If
+                Else
+                    UnicodeMessage UI(58), vbExclamation
+                End If
+            End If
+            GoTo Done
+        End If
         FormRows firstRow, totalRow
         Set dest = target.Cells(1, 1).MergeArea.Cells(1, 1)
         Set changed = Intersect(target, SearchInputCells())
@@ -692,6 +1053,16 @@ Public Sub HandleChange(ByVal Sh As Object, ByVal target As Range)
             End If
         End If
         RefreshTotals firstRow, totalRow
+    ElseIf Sh.Name = WS(DRIVERS).Name Then
+        RefreshDriver
+    ElseIf Sh.Name = WS(SETTINGS).Name Then
+        If Not Intersect(target, Sh.Range("A2:B5")) Is Nothing Then
+            If Not RulesValid() Then UnicodeMessage UI(66), vbExclamation: GoTo Done
+            WS(MAIN).Range("K11:K32").FormulaR1C1 = WarehouseFormula()
+            FormRows firstRow, totalRow
+            ColorStatuses firstRow, totalRow
+            WS(MAIN).Calculate
+        End If
     ElseIf Sh.Name = WS(CLIENTS).Name Or Sh.Name = WS(PRODUCTS).Name Then
         FillNames
         BuildList True, ""
@@ -727,7 +1098,7 @@ Public Sub HandleDoubleClick(ByVal Sh As Object, ByVal target As Range, ByRef Ca
             ReprintSavedSheet Sh.Name
         End If
     ElseIf Sh.Name = "Archive" Then
-        If target.row >= 4 And target.Column = 9 Then
+        If target.row >= 5 And target.Column = 9 Then
             Cancel = True
             ReprintArchive
         End If
@@ -739,13 +1110,15 @@ Public Sub Initialize()
     oldEvents = Application.EnableEvents
     On Error GoTo Failed
     Application.EnableEvents = False
-    ThisWorkbook.Names.Add Name:="ReturnReasons", RefersTo:="='" & Replace(WS(SETTINGS).Name, "'", "''") & "'!$A$2:$A$7"
+    ThisWorkbook.Names.Add Name:="ReturnReasons", RefersTo:="='" & Replace(WS(SETTINGS).Name, "'", "''") & "'!$C$2:$C$7"
+    If Not RulesValid() Then Err.Raise vbObjectError + 941, "Initialize", UI(66)
+    RefreshDriver
     FormRows firstRow, totalRow
     RepairTableHeadings firstRow
     RefreshTotals firstRow, totalRow
     FitReceiptPage WS(MAIN)
-    WS(SETTINGS).Range("C2").value = NextNumber()
-    WS(MAIN).Range("L8").Formula = "=""#""&'" & Replace(WS(SETTINGS).Name, "'", "''") & "'!$C$2"
+    WS(SETTINGS).Range("E2").value = NextNumber()
+    WS(MAIN).Range("L8").Formula = "=""#""&'" & Replace(WS(SETTINGS).Name, "'", "''") & "'!$E$2"
     FillNames
     BuildList True, ""
     BuildList False, ""
@@ -762,6 +1135,8 @@ Public Sub Initialize()
     WS(MAIN).Calculate
 Done:
     Application.EnableEvents = oldEvents
+    WS(MAIN).Activate
+    WS(MAIN).Range("B6").Select
     Exit Sub
 Failed:
     UnicodeMessage UI(6) & vbCrLf & Err.Description, vbExclamation
@@ -771,8 +1146,8 @@ End Sub
 Private Function NextNumber() As Long
     Dim Sh As Worksheet, n As Long, suffix As String, log As Worksheet, row As Long
     n = 1
-    If IsNumeric(WS(SETTINGS).Range("C2").value) Then
-        If CDbl(WS(SETTINGS).Range("C2").value) >= 1 Then n = CLng(WS(SETTINGS).Range("C2").value)
+    If IsNumeric(WS(SETTINGS).Range("E2").value) Then
+        If CDbl(WS(SETTINGS).Range("E2").value) >= 1 Then n = CLng(WS(SETTINGS).Range("E2").value)
     End If
     For Each Sh In ThisWorkbook.Worksheets
         If Left$(Sh.Name, 4) = "RET_" Then
@@ -783,7 +1158,7 @@ Private Function NextNumber() As Long
         End If
     Next Sh
     Set log = ThisWorkbook.Worksheets("Archive")
-    For row = 5 To LastRow(log, 12)
+    For row = 5 To LastRow(log, 15)
         If IsNumeric(log.Cells(row, 1).Value2) Then
             If CDbl(log.Cells(row, 1).Value2) >= n Then n = CLng(log.Cells(row, 1).Value2) + 1
         End If
@@ -794,6 +1169,11 @@ End Function
 Private Function ValidForm() As Boolean
     Dim r As Long, c As Long, firstRow As Long, totalRow As Long
     Dim quantity As Double, entries As Long, code As String, value As String
+    If Not RulesValid() Then UnicodeMessage UI(66), vbExclamation: Exit Function
+    If Not DriverValid() Then UnicodeMessage UI(68), vbExclamation: Exit Function
+    If Len(CellText(WS(MAIN).Range("D6"))) = 0 Then UnicodeMessage UI(69), vbExclamation: Exit Function
+    If Len(CellText(WS(MAIN).Range("F6"))) = 0 Then UnicodeMessage UI(70), vbExclamation: Exit Function
+    RefreshDriver
     code = CellText(WS(MAIN).Range("A8"))
     If Len(code) = 0 Then UnicodeMessage UI(10), vbExclamation: Exit Function
     If CodeRow(WS(CLIENTS), code) <= 0 Then UnicodeMessage UI(8), vbExclamation: Exit Function
@@ -937,7 +1317,7 @@ Public Sub ArchiveAndPrint()
     Dim pdfPath As String, relativeName As String, paper As Boolean, errorText As String, paperError As String
     Dim oldEvents As Boolean, oldScreen As Boolean, oldCounter As Variant
     Dim itemBackup As Variant, noteBackup As Variant, clientCode As Variant, clientName As Variant, topCode As Variant, topName As Variant
-    Dim copiesRequested As Variant, copyCount As Long, returnBackup As Variant, invoiceBackup As Variant
+    Dim copiesRequested As Variant, copyCount As Long, returnBackup As Variant, invoiceBackup As Variant, driverBackup As Variant
     Dim backupReady As Boolean, resetStarted As Boolean, pdfSaved As Boolean, committed As Boolean
     If BusyPrinting Then Exit Sub
     oldEvents = Application.EnableEvents
@@ -970,7 +1350,7 @@ Public Sub ArchiveAndPrint()
     pdfPath = pdfPath & relativeName
     ' Keep a durable filled-in copy until the PDF is successfully exported.
     ThisWorkbook.Save
-    oldCounter = WS(SETTINGS).Range("C2").Value2
+    oldCounter = WS(SETTINGS).Range("E2").Value2
     itemBackup = form.Range(form.Cells(firstRow, 2), form.Cells(totalRow - 1, 10)).Formula
     noteBackup = form.Range(form.Cells(firstRow, 12), form.Cells(totalRow - 1, 13)).Formula
     clientCode = form.Range("A8").Formula
@@ -979,20 +1359,26 @@ Public Sub ArchiveAndPrint()
         topCode = form.Range("D12").Formula
         topName = form.Range("G12").Formula
     End If
+    driverBackup = form.Range("B6").Formula
     returnBackup = form.Range("D6").Formula
     invoiceBackup = form.Range("F6").Formula
     backupReady = True
     BusyPrinting = True
     Application.EnableEvents = False
     Application.ScreenUpdating = False
-    WS(SETTINGS).Range("C2").Value2 = number
+    WS(SETTINGS).Range("E2").Value2 = number
     form.Calculate
     PrepareReceiptCopy number, totalRow, temporary, receipt
     ExportReceiptPDF receipt, pdfPath
     pdfSaved = True
     KeepReceipt receipt, number, saved
-    logRow = LastRow(log, 12) + 1
+    logRow = LastRow(log, 15) + 1
     If logRow < 5 Then logRow = 5
+    If logRow > 5 Then
+        log.Range("A5:O5").Copy
+        log.Range(log.Cells(logRow, 1), log.Cells(logRow, 15)).PasteSpecial xlPasteFormats
+        Application.CutCopyMode = False
+    End If
     log.Cells(logRow, 1).Value2 = number
     log.Hyperlinks.Add Anchor:=log.Cells(logRow, 1), address:="", SubAddress:="'" & saved.Name & "'!A1", TextToDisplay:=CStr(number)
     log.Cells(logRow, 2).value = Now
@@ -1008,6 +1394,12 @@ Public Sub ArchiveAndPrint()
     log.Cells(logRow, 11).Value2 = CStr(form.Range("D6").Value2)
     log.Cells(logRow, 12).NumberFormat = "yyyy-mm-dd"
     If Len(CellText(form.Range("F6"))) > 0 Then log.Cells(logRow, 12).Value2 = form.Range("F6").Value2
+    log.Cells(logRow, 13).NumberFormat = "@"
+    log.Cells(logRow, 13).Value2 = CStr(form.Range("B6").Value2)
+    log.Cells(logRow, 14).Value2 = form.Range("L35").Value2
+    log.Cells(logRow, 15).Value2 = ReceiptWarehouses(firstRow, totalRow)
+    log.Cells(logRow, 15).WrapText = True
+    log.Rows(logRow).AutoFit
     log.Cells(logRow, 9).Value2 = UI(42)
     log.Hyperlinks.Add Anchor:=log.Cells(logRow, 10), address:=relativeName, TextToDisplay:=relativeName
     resetStarted = True
@@ -1019,9 +1411,10 @@ Public Sub ArchiveAndPrint()
     End If
     form.Range(form.Cells(firstRow, 2), form.Cells(totalRow - 1, 10)).ClearContents
     form.Range(form.Cells(firstRow, 12), form.Cells(totalRow - 1, 13)).ClearContents
+    form.Range("B6").ClearContents
     form.Range("D6").ClearContents
     form.Range("F6").ClearContents
-    WS(SETTINGS).Range("C2").Value2 = number + 1
+    WS(SETTINGS).Range("E2").Value2 = number + 1
     BuildList True, ""
     BuildList False, ""
     RefreshTotals firstRow, totalRow
@@ -1044,6 +1437,7 @@ Public Sub ArchiveAndPrint()
     Application.ScreenUpdating = oldScreen
     BusyPrinting = False
     form.Activate
+    form.Range("B6").Select
     If Len(paperError) > 0 Then
         UnicodeMessage UI(46) & vbCrLf & pdfPath & vbCrLf & paperError & vbCrLf & UI(20), vbExclamation
     End If
@@ -1056,6 +1450,8 @@ Failed:
         If resetStarted Then
             RestoreCells form.Range(form.Cells(firstRow, 2), form.Cells(totalRow - 1, 10)), itemBackup
             RestoreCells form.Range(form.Cells(firstRow, 12), form.Cells(totalRow - 1, 13)), noteBackup
+            form.Range("B6").Formula = driverBackup
+            RefreshDriver
             form.Range("D6").Formula = returnBackup
             form.Range("F6").Formula = invoiceBackup
             form.Range("A8").Formula = clientCode
@@ -1065,8 +1461,11 @@ Failed:
                 form.Range("G12").Formula = topName
             End If
         End If
-        WS(SETTINGS).Range("C2").Value2 = oldCounter
-        If logRow >= 5 Then log.Range(log.Cells(logRow, 1), log.Cells(logRow, 12)).Clear
+        WS(SETTINGS).Range("E2").Value2 = oldCounter
+        If logRow >= 5 Then
+            log.Range(log.Cells(logRow, 1), log.Cells(logRow, 15)).Hyperlinks.Delete
+            log.Range(log.Cells(logRow, 1), log.Cells(logRow, 15)).ClearContents
+        End If
         form.Calculate
     End If
     CloseReceiptCopy temporary
