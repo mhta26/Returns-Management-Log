@@ -12,15 +12,15 @@ Private Sub Workbook_Open()
     Module1.Initialize
 End Sub
 
-Private Sub Workbook_SheetChange(ByVal Sh As Object, ByVal target As Range)
+Private Sub Workbook_SheetChange(ByVal Sh As Object, ByVal target As Excel.Range)
     Module1.HandleChange Sh, target
 End Sub
 
-Private Sub Workbook_SheetBeforeDoubleClick(ByVal Sh As Object, ByVal target As Range, Cancel As Boolean)
+Private Sub Workbook_SheetBeforeDoubleClick(ByVal Sh As Object, ByVal target As Excel.Range, Cancel As Boolean)
     Module1.HandleDoubleClick Sh, target, Cancel
 End Sub
 
-Private Sub Workbook_SheetSelectionChange(ByVal Sh As Object, ByVal target As Range)
+Private Sub Workbook_SheetSelectionChange(ByVal Sh As Object, ByVal target As Excel.Range)
     Module1.HandleSelection Sh, target
 End Sub
 

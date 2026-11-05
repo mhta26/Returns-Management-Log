@@ -30,7 +30,7 @@ Private ClientCacheReady As Boolean, ProductCacheReady As Boolean
 Private ClientCacheLast As Long, ProductCacheLast As Long
 Private SearchStatusOwned As Boolean, OriginalSearchStatus As Variant
 
-Private LookupControl As OLEObject, LookupAnchor As Range
+Private LookupControl As Excel.OLEObject, LookupAnchor As Excel.Range
 Private LookupHandler As LookupEvents
 Private LookupUpdating As Boolean, LookupCompleting As Boolean, LookupCustomer As Boolean
 Private LookupChanged As Boolean, LookupKeyboardMove As Boolean, LookupDisabled As Boolean
@@ -55,8 +55,8 @@ Private Sub OpenUnicodePDF(ByVal path As String)
 End Sub
 
 
-Private Function WS(ByVal n As Long) As Worksheet
-    Dim sheet As Worksheet, expected As String
+Private Function WS(ByVal n As Long) As Excel.Worksheet
+    Dim sheet As Excel.Worksheet, expected As String
     Select Case n
     Case MAIN: expected = "Sheet1"
     Case CLIENTS: expected = "Sheet2"
@@ -361,7 +361,7 @@ Public Sub ReleaseNotesReturn()
 End Sub
 
 Private Sub UpdateNotesReturn()
-    Dim firstRow As Long, totalRow As Long, current As Range, macroName As String
+    Dim firstRow As Long, totalRow As Long, current As Excel.Range, macroName As String
     On Error GoTo Release
     If Not ActiveWorkbook Is ThisWorkbook Then GoTo Release
     If ActiveSheet.name <> WS(MAIN).name Then GoTo Release
@@ -464,7 +464,7 @@ Restore:
     RestoreEntryMode
 End Sub
 
-Private Sub QueueEntry(ByVal destination As Range, Optional ByVal openSearch As Boolean = False)
+Private Sub QueueEntry(ByVal destination As Excel.Range, Optional ByVal openSearch As Boolean = False)
     PendingEntryAddress = destination.address
     PendingEntrySearch = openSearch
 End Sub
@@ -479,8 +479,8 @@ Private Sub TrackEntry()
     UpdateNotesReturn
 End Sub
 
-Public Sub HandleSelection(ByVal Sh As Object, ByVal target As Range)
-    Dim cell As Range, firstRow As Long, totalRow As Long, search As Boolean, oldEvents As Boolean
+Public Sub HandleSelection(ByVal Sh As Object, ByVal target As Excel.Range)
+    Dim cell As Excel.Range, firstRow As Long, totalRow As Long, search As Boolean, oldEvents As Boolean
     If BusyPrinting Or BusySearching Or LookupUpdating Or LookupCompleting Then Exit Sub
     If Sh.name <> WS(MAIN).name Then Exit Sub
     oldEvents = Application.EnableEvents
@@ -532,7 +532,7 @@ Failed:
 End Sub
 
 
-Private Function LastRow(ByVal Sh As Worksheet, ByVal cols As Long) As Long
+Private Function LastRow(ByVal Sh As Excel.Worksheet, ByVal cols As Long) As Long
     Dim c As Long, r As Long
     LastRow = 1
     For c = 1 To cols
@@ -571,8 +571,8 @@ Private Function Matches(ByVal haystack As String, ByVal query As String) As Boo
     Matches = True
 End Function
 
-Private Function IsLookupCell(ByVal target As Range) As Boolean
-    Dim firstRow As Long, totalRow As Long, cell As Range
+Private Function IsLookupCell(ByVal target As Excel.Range) As Boolean
+    Dim firstRow As Long, totalRow As Long, cell As Excel.Range
     Set cell = target.MergeArea.Cells(1, 1)
     If cell.Row = 8 And (cell.Column = 1 Or cell.Column = 2) Then IsLookupCell = True: Exit Function
     FormRows firstRow, totalRow
@@ -598,8 +598,8 @@ Public Sub ReleaseLookup()
     On Error GoTo 0
 End Sub
 
-Private Function ShowLookup(ByVal target As Range) As Boolean
-    Dim anchor As Range, oldEvents As Boolean, errorText As String, errorNumber As Long
+Private Function ShowLookup(ByVal target As Excel.Range) As Boolean
+    Dim anchor As Excel.Range, oldEvents As Boolean, errorText As String, errorNumber As Long
     If LookupDisabled Or LookupCompleting Or LookupUpdating Or BusyPrinting Then Exit Function
     If Not IsLookupCell(target) Then Exit Function
     oldEvents = Application.EnableEvents
@@ -803,7 +803,7 @@ Failed:
 End Sub
 
 Private Function CommitLookup() As Boolean
-    Dim selected As Long, code As String, found As Long, anchor As Range
+    Dim selected As Long, code As String, found As Long, anchor As Excel.Range
     Dim oldEvents As Boolean, errorText As String
     If LookupUpdating Or LookupCompleting Then Exit Function
     If LookupAnchor Is Nothing Or LookupControl Is Nothing Then Exit Function
@@ -916,7 +916,7 @@ Private Sub InvalidateSearchCaches()
 End Sub
 
 Private Sub EnsureSearchCache(ByVal customer As Boolean)
-    Dim src As Worksheet, data As Variant, prepared() As String, index As Object
+    Dim src As Excel.Worksheet, data As Variant, prepared() As String, index As Object
     Dim last As Long, i As Long, key As String, ready As Boolean, cachedLast As Long
     If customer Then
         ready = ClientCacheReady: cachedLast = ClientCacheLast
@@ -958,7 +958,7 @@ End Sub
 Private Function FilterSearchData(ByVal customer As Boolean, ByVal query As String, ByRef data As Variant, ByRef prepared() As String) As Long
     Dim i As Long, j As Long, count As Long, oldLast As Long, column As Long, rows As Long
     Dim matches() As Long, result() As Variant, tokens As Variant, token As Variant, accepted As Boolean
-    Dim listName As String, reference As String, existing As Name
+    Dim listName As String, reference As String, existing As Excel.Name
     If customer Then column = 27: listName = "InlineClients" Else column = 28: listName = "InlineProducts"
     tokens = Split(Normal(query), " ")
     If IsArray(data) Then
@@ -1018,7 +1018,7 @@ Public Sub RestoreSearchStatus()
     End If
 End Sub
 
-Private Function CodeRow(ByVal src As Worksheet, ByVal code As String) As Long
+Private Function CodeRow(ByVal src As Excel.Worksheet, ByVal code As String) As Long
     Dim key As String, index As Object, r As Long, found As Long
     key = Normal(code)
     If Len(key) = 0 Then Exit Function
@@ -1044,7 +1044,7 @@ Private Function CodeRow(ByVal src As Worksheet, ByVal code As String) As Long
     CodeRow = found
 End Function
 
-Private Function CellText(ByVal cell As Range) As String
+Private Function CellText(ByVal cell As Excel.Range) As String
     If IsError(cell.Value2) Then
         CellText = "#ERROR"
     Else
@@ -1053,7 +1053,7 @@ Private Function CellText(ByVal cell As Range) As String
 End Function
 
 Private Sub FormRows(ByRef firstRow As Long, ByRef totalRow As Long)
-    Dim r As Long, lastLabelRow As Long, title As String, header As Range
+    Dim r As Long, lastLabelRow As Long, title As String, header As Excel.Range
     firstRow = 0: totalRow = 0
     lastLabelRow = WS(MAIN).Cells(WS(MAIN).Rows.count, 1).End(xlUp).row
     For r = 1 To lastLabelRow
@@ -1086,7 +1086,7 @@ Private Function LastItemRow() As Long
     LastItemRow = totalRow - 1
 End Function
 
-Private Function ItemCells(ByVal firstCol As Long, ByVal lastCol As Long) As Range
+Private Function ItemCells(ByVal firstCol As Long, ByVal lastCol As Long) As Excel.Range
     Dim firstRow As Long, totalRow As Long
     FormRows firstRow, totalRow
     Set ItemCells = WS(MAIN).Range(WS(MAIN).Cells(firstRow, firstCol), WS(MAIN).Cells(totalRow - 1, lastCol))
@@ -1110,14 +1110,14 @@ Private Function RowHasData(ByVal r As Long) As Boolean
     Next c
 End Function
 
-Private Function HasList(ByVal cell As Range) As Boolean
+Private Function HasList(ByVal cell As Excel.Range) As Boolean
     On Error Resume Next
     HasList = (cell.Validation.Type = xlValidateList)
     On Error GoTo 0
 End Function
 
 Private Sub ColorStatuses(ByVal firstRow As Long, ByVal totalRow As Long)
-    Dim target As Range, rule As FormatCondition, i As Long, colors As Variant
+    Dim target As Excel.Range, rule As Excel.FormatCondition, i As Long, colors As Variant
     Set target = WS(MAIN).Range(WS(MAIN).Cells(firstRow, 11), WS(MAIN).Cells(totalRow - 1, 11))
     colors = Array(RGB(255, 199, 206), RGB(248, 203, 173), RGB(255, 235, 156), RGB(198, 239, 206))
     Dim unchanged As Boolean
@@ -1163,7 +1163,7 @@ Private Sub EnsureItemRows(ByVal firstRow As Long, ByVal totalRow As Long)
     ColorStatuses firstRow, totalRow
 End Sub
 
-Private Sub FitReceiptPage(ByVal receipt As Worksheet)
+Private Sub FitReceiptPage(ByVal receipt As Excel.Worksheet)
     Dim previousCommunication As Boolean, errorNumber As Long, errorText As String
     previousCommunication = Application.PrintCommunication
     On Error GoTo Failed
@@ -1213,12 +1213,12 @@ Private Function HasTopSearch() As Boolean
     HasTopSearch = False
 End Function
 
-Private Function SearchInputCells() As Range
+Private Function SearchInputCells() As Excel.Range
     Set SearchInputCells = Application.Union(WS(MAIN).Range("A8,B8"), ItemCells(2, 3))
     If HasTopSearch() Then Set SearchInputCells = Application.Union(SearchInputCells, WS(MAIN).Range("D12,G12"))
 End Function
 
-Private Function ProductSearchTarget() As Range
+Private Function ProductSearchTarget() As Excel.Range
     Dim row As Long
     If HasTopSearch() Then
         Set ProductSearchTarget = WS(MAIN).Range("G12")
@@ -1237,15 +1237,15 @@ Private Sub RepairTableHeadings(ByVal firstRow As Long)
     ' Headings belong to the final design and must never be overwritten.
 End Sub
 
-Private Function IsClientCell(ByVal dest As Range) As Boolean
+Private Function IsClientCell(ByVal dest As Excel.Range) As Boolean
     IsClientCell = (dest.row = 8 And (dest.Column = 1 Or dest.Column = 2))
 End Function
 
-Private Function CandidateSource(ByVal customer As Boolean) As Worksheet
+Private Function CandidateSource(ByVal customer As Boolean) As Excel.Worksheet
     If customer Then Set CandidateSource = WS(CLIENTS) Else Set CandidateSource = WS(PRODUCTS)
 End Function
 
-Private Sub SetList(ByVal dest As Range, ByVal listName As String)
+Private Sub SetList(ByVal dest As Excel.Range, ByVal listName As String)
     With dest.MergeArea.Validation
         .Delete
         .Add Type:=xlValidateList, AlertStyle:=xlValidAlertInformation, Operator:=xlBetween, Formula1:="=" & listName
@@ -1267,7 +1267,7 @@ Private Function BuildList(ByVal customer As Boolean, ByVal query As String) As 
     End If
 End Function
 
-Private Sub ShowList(ByVal dest As Range)
+Private Sub ShowList(ByVal dest As Excel.Range)
     PendingNativeDropdown = dest.address
     QueueEntry dest
 End Sub
@@ -1286,8 +1286,8 @@ Private Sub FillNames()
     Next r
 End Sub
 
-Private Sub ApplyChoice(ByVal dest As Range, ByVal sourceRow As Long)
-    Dim customer As Boolean, src As Worksheet, r As Long
+Private Sub ApplyChoice(ByVal dest As Excel.Range, ByVal sourceRow As Long)
+    Dim customer As Boolean, src As Excel.Worksheet, r As Long
     customer = IsClientCell(dest)
     Set src = CandidateSource(customer)
     RestoreSearchStatus
@@ -1322,8 +1322,8 @@ Private Sub ApplyChoice(ByVal dest As Range, ByVal sourceRow As Long)
     If customer Then WS(MAIN).Cells(FirstItemRow(), 3).Select
 End Sub
 
-Private Sub SearchChanged(ByVal dest As Range)
-    Dim customer As Boolean, src As Worksheet, query As String, code As String
+Private Sub SearchChanged(ByVal dest As Excel.Range)
+    Dim customer As Boolean, src As Excel.Worksheet, query As String, code As String
     Dim p As Long, found As Long, count As Long, c As Long, listName As String
     customer = IsClientCell(dest)
     Set src = CandidateSource(customer)
@@ -1368,7 +1368,7 @@ Private Sub SearchChanged(ByVal dest As Range)
     End If
 End Sub
 
-Private Sub StartSearch(ByVal dest As Range)
+Private Sub StartSearch(ByVal dest As Excel.Range)
     Dim oldEvents As Boolean, customer As Boolean, listName As String
     If ShowLookup(dest) Then Exit Sub
     oldEvents = Application.EnableEvents
@@ -1402,9 +1402,9 @@ Public Sub SearchClients()
     If ActiveSheet.name = WS(MAIN).name Then StartSearch WS(MAIN).Range("A8")
 End Sub
 
-Public Sub HandleChange(ByVal Sh As Object, ByVal target As Range)
-    Dim oldEvents As Boolean, dest As Range, firstRow As Long, totalRow As Long
-    Dim changed As Range, cell As Range, found As Long, customer As Boolean, src As Worksheet
+Public Sub HandleChange(ByVal Sh As Object, ByVal target As Excel.Range)
+    Dim oldEvents As Boolean, dest As Excel.Range, firstRow As Long, totalRow As Long
+    Dim changed As Excel.Range, cell As Excel.Range, found As Long, customer As Boolean, src As Excel.Worksheet
     Dim query As String, splitAt As Long
     If BusyPrinting Or LookupUpdating Or LookupCompleting Then Exit Sub
     oldEvents = Application.EnableEvents
@@ -1516,7 +1516,7 @@ Failed:
     Resume Done
 End Sub
 
-Public Sub HandleDoubleClick(ByVal Sh As Object, ByVal target As Range, ByRef Cancel As Boolean)
+Public Sub HandleDoubleClick(ByVal Sh As Object, ByVal target As Excel.Range, ByRef Cancel As Boolean)
     If Sh.name = WS(MAIN).name Then
         If Not Intersect(target, Sh.Range("L6").MergeArea) Is Nothing Then
             Cancel = True
@@ -1589,7 +1589,7 @@ Failed:
 End Sub
 
 Private Function NextNumber() As Long
-    Dim Sh As Worksheet, n As Long, suffix As String, log As Worksheet, row As Long
+    Dim Sh As Excel.Worksheet, n As Long, suffix As String, log As Excel.Worksheet, row As Long
     n = 1
     If IsNumeric(WS(SETTINGS).Range("E2").value) Then
         If CDbl(WS(SETTINGS).Range("E2").value) >= 1 Then n = CLng(WS(SETTINGS).Range("E2").value)
@@ -1695,7 +1695,7 @@ Public Function IsSavedReceiptSheet(ByVal sheetName As String) As Boolean
     If IsNumeric(suffix) Then IsSavedReceiptSheet = (CDbl(suffix) > 0)
 End Function
 
-Private Sub CloseReceiptCopy(ByRef temporary As Workbook)
+Private Sub CloseReceiptCopy(ByRef temporary As Excel.Workbook)
     On Error Resume Next
     Application.CutCopyMode = False
     If Not temporary Is Nothing Then temporary.Close SaveChanges:=False
@@ -1703,7 +1703,7 @@ Private Sub CloseReceiptCopy(ByRef temporary As Workbook)
     On Error GoTo 0
 End Sub
 
-Private Sub PrepareReceiptCopy(ByVal number As Long, ByVal totalRow As Long, ByRef temporary As Workbook, ByRef receipt As Worksheet)
+Private Sub PrepareReceiptCopy(ByVal number As Long, ByVal totalRow As Long, ByRef temporary As Excel.Workbook, ByRef receipt As Excel.Worksheet)
     Dim address As String, i As Long
     address = "A1:M36"
     WS(MAIN).Calculate
@@ -1724,14 +1724,14 @@ Private Sub PrepareReceiptCopy(ByVal number As Long, ByVal totalRow As Long, ByR
     FitReceiptPage receipt
 End Sub
 
-Private Sub ExportReceiptPDF(ByVal receipt As Worksheet, ByVal path As String)
+Private Sub ExportReceiptPDF(ByVal receipt As Excel.Worksheet, ByVal path As String)
     receipt.ExportAsFixedFormat Type:=xlTypePDF, fileName:=path, Quality:=xlQualityStandard, IncludeDocProperties:=True, IgnorePrintAreas:=False, OpenAfterPublish:=False
     If Not FileExists(path) Then Err.Raise vbObjectError + 921, "ExportReceiptPDF", UI(56)
     If CreateObject("Scripting.FileSystemObject").GetFile(path).Size = 0 Then Err.Raise vbObjectError + 921, "ExportReceiptPDF", UI(56)
 End Sub
 
-Private Sub RestoreCells(ByVal target As Range, ByVal saved As Variant)
-    Dim cell As Range
+Private Sub RestoreCells(ByVal target As Excel.Range, ByVal saved As Variant)
+    Dim cell As Excel.Range
     For Each cell In target.Cells
         If cell.address = cell.MergeArea.Cells(1, 1).address Then
             cell.Formula = saved(cell.row - target.row + 1, cell.Column - target.Column + 1)
@@ -1739,7 +1739,7 @@ Private Sub RestoreCells(ByVal target As Range, ByVal saved As Variant)
     Next cell
 End Sub
 
-Private Sub RemoveUncommittedReceipt(ByVal saved As Worksheet)
+Private Sub RemoveUncommittedReceipt(ByVal saved As Excel.Worksheet)
     Dim alerts As Boolean
     alerts = Application.DisplayAlerts
     On Error Resume Next
@@ -1749,7 +1749,7 @@ Private Sub RemoveUncommittedReceipt(ByVal saved As Worksheet)
     On Error GoTo 0
 End Sub
 
-Private Sub KeepReceipt(ByVal receipt As Worksheet, ByVal number As Long, ByRef saved As Worksheet)
+Private Sub KeepReceipt(ByVal receipt As Excel.Worksheet, ByVal number As Long, ByRef saved As Excel.Worksheet)
     receipt.Copy After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.count)
     Set saved = ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.count)
     saved.name = "RET_" & Format$(number, "000000")
@@ -1757,7 +1757,7 @@ Private Sub KeepReceipt(ByVal receipt As Worksheet, ByVal number As Long, ByRef 
 End Sub
 
 Public Sub ArchiveAndPrint()
-    Dim form As Worksheet, log As Worksheet, receipt As Worksheet, temporary As Workbook, saved As Worksheet
+    Dim form As Excel.Worksheet, log As Excel.Worksheet, receipt As Excel.Worksheet, temporary As Excel.Workbook, saved As Excel.Worksheet
     Dim firstRow As Long, totalRow As Long, number As Long, logRow As Long
     Dim pdfPath As String, relativeName As String, paper As Boolean, errorText As String, paperError As String
     Dim oldEvents As Boolean, oldScreen As Boolean, oldCounter As Variant
@@ -1930,8 +1930,8 @@ Failed:
 End Sub
 
 Private Sub OpenLogPDF(ByVal row As Long, Optional ByVal legacyName As String = "")
-    Dim log As Worksheet, address As String, path As String, number As Long
-    Dim receipt As Worksheet, oldEvents As Boolean, oldBusy As Boolean, errorText As String
+    Dim log As Excel.Worksheet, address As String, path As String, number As Long
+    Dim receipt As Excel.Worksheet, oldEvents As Boolean, oldBusy As Boolean, errorText As String
     oldEvents = Application.EnableEvents
     oldBusy = BusyPrinting
     On Error GoTo Failed
@@ -1972,7 +1972,7 @@ Failed:
 End Sub
 
 Public Sub ReprintArchive()
-    Dim log As Worksheet
+    Dim log As Excel.Worksheet
     Set log = ThisWorkbook.Worksheets("Archive")
     If ActiveSheet.name <> log.name Or ActiveCell.row < 5 Then UnicodeMessage UI(25), vbInformation: Exit Sub
     OpenLogPDF ActiveCell.row
