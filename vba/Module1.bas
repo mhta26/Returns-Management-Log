@@ -92,6 +92,19 @@ Private EntryModeActive As Boolean, PreviousReturnEnabled As Boolean, PreviousRe
 Private PendingEntryAddress As String, PendingEntrySearch As Boolean, LastEntryRow As Long, LastEntryColumn As Long
 Private LiveDropCell As LiveRectangle, LiveDropWork As LiveRectangle, LiveDropRTL As Boolean, LiveMatchCount As Long, LiveNoResults As String
 
+Private Type LiveGuid
+    data1 As Long
+    data2 As Integer
+    data3 As Integer
+    data4(0 To 7) As Byte
+End Type
+Private Declare PtrSafe Function LiveFindWindow Lib "user32" Alias "FindWindowExW" (ByVal parent As LongPtr, ByVal after As LongPtr, ByVal className As LongPtr, ByVal title As LongPtr) As LongPtr
+Private Declare PtrSafe Function LiveGuidFromText Lib "ole32" Alias "CLSIDFromString" (ByVal text As LongPtr, ByRef iid As LiveGuid) As Long
+Private Declare PtrSafe Function LiveAccessibleObject Lib "oleacc" Alias "AccessibleObjectFromWindow" (ByVal hwnd As LongPtr, ByVal objectId As Long, ByRef iid As LiveGuid, ByRef result As Object) As Long
+Private LiveStage As String
+Private LivePriming As Boolean, LiveEdited As Boolean, LiveExitKey As Long, LiveEntryText As String
+Private Declare PtrSafe Function LiveShow Lib "user32" Alias "ShowWindow" (ByVal hwnd As LongPtr, ByVal command As Long) As Long
+
 Private Function UnicodeMessage(ByVal prompt As String, Optional ByVal buttons As Long = 0) As Long
     Dim title As String
     title = ThisWorkbook.Name
@@ -513,14 +526,42 @@ Private Function LiveControl(ByVal className As String, ByVal title As String, B
     LiveSend LiveControl, &H30, LiveFont(17), 1
 End Function
 
+Private Function LiveEntryValue() As String
+    Dim length As Long, buffer As String
+    If LiveEdit = 0 Then Exit Function
+    length = LiveTextLength(LiveEdit)
+    buffer = String$(length + 1, vbNullChar)
+    LiveReadText LiveEdit, StrPtr(buffer), length + 1
+    LiveEntryValue = Left$(buffer, length)
+End Function
+
+Private Sub LiveInputOnly()
+    Dim width As Long, height As Long
+    width = LiveDropCell.right - LiveDropCell.left - 2
+    height = LiveDropCell.bottom - LiveDropCell.top - 2
+    If width < 20 Then width = 20
+    If height < 12 Then height = 12
+    LiveShow LiveList, 0
+    LiveSetRegion LiveWindow, 0, 1
+    LiveMove LiveWindow, 0, LiveDropCell.left + 1, LiveDropCell.top + 1, width, height, &H54
+    LiveMove LiveEdit, 0, 0, 0, width, height, &H14
+End Sub
+
 Private Sub LiveFilter()
     Dim query As String, buffer As String, length As Long, tokens As Variant, token As Variant
     Dim i As Long, count As Long, matches As Boolean, label As String
+    If LivePriming Then Exit Sub
     If LiveEdit = 0 Or LiveList = 0 Then Exit Sub
+    LiveEdited = True
     length = LiveTextLength(LiveEdit)
     buffer = String$(length + 1, vbNullChar)
     LiveReadText LiveEdit, StrPtr(buffer), length + 1
     query = Normal(Left$(buffer, length))
+    If Len(query) = 0 Then
+        LiveMatchCount = 0
+        LiveInputOnly
+        Exit Sub
+    End If
     tokens = Split(query, " ")
     LiveSend LiveList, &HB, 0, 0
     LiveSend LiveList, &H184, 0, 0
@@ -550,6 +591,7 @@ Private Sub LiveFilter()
         LiveSend LiveList, &H180, 0, StrPtr(label)
     End If
     LiveLayout count
+    LiveShow LiveList, 4
 End Sub
 
 Private Sub LiveConfirm()
@@ -587,15 +629,145 @@ Failed:
     LiveFinished = True
 End Function
 
+Private Function LiveGridWindow(ByVal parentWindow As LongPtr) As LongPtr
+    Dim name As String, desk As LongPtr
+    name = "XLDESK"
+    desk = LiveFindWindow(parentWindow, 0, StrPtr(name), 0)
+    name = "EXCEL7"
+    If desk <> 0 Then LiveGridWindow = LiveFindWindow(desk, 0, StrPtr(name), 0)
+    If LiveGridWindow = 0 Then LiveGridWindow = LiveFindWindow(parentWindow, 0, StrPtr(name), 0)
+    If LiveGridWindow = 0 Then LiveGridWindow = parentWindow
+End Function
+
+Private Function LiveHitCell(ByVal x As Long, ByVal y As Long, ByVal anchor As Range) As Boolean
+    Dim hit As Object
+    On Error GoTo Done
+    Set hit = ActiveWindow.RangeFromPoint(x, y)
+    If TypeName(hit) <> "Range" Then Exit Function
+    If Not hit.Worksheet Is anchor.Worksheet Then Exit Function
+    LiveHitCell = (hit.MergeArea.Cells(1, 1).Address = anchor.MergeArea.Cells(1, 1).Address)
+Done:
+End Function
+
+Private Function LiveAccessibleRect(ByVal grid As LongPtr, ByVal anchor As Range, ByRef bounds As LiveRectangle) As Boolean
+    Dim iid As LiveGuid, guidText As String, accessible As Object, selected As Object, child As Variant
+    Dim x As Long, y As Long, width As Long, height As Long, attempt As Long
+    On Error GoTo Done
+    guidText = "{618736E0-3C3D-11CF-810C-00AA00389B71}"
+    If LiveGuidFromText(StrPtr(guidText), iid) <> 0 Then Exit Function
+    If LiveAccessibleObject(grid, &HFFFFFFFC, iid, accessible) <> 0 Then Exit Function
+    For attempt = 1 To 2
+        Set selected = Nothing
+        On Error Resume Next
+        Err.Clear
+        If attempt = 1 Then Set selected = accessible.accSelection Else Set selected = accessible.accFocus
+        On Error GoTo Done
+        If Not selected Is Nothing Then
+            selected.accLocation x, y, width, height, 0
+        Else
+            If attempt = 1 Then child = accessible.accSelection Else child = accessible.accFocus
+            If IsNumeric(child) Then accessible.accLocation x, y, width, height, child
+        End If
+        If width > 20 And height > 8 And height < 300 Then
+            If LiveHitCell(x + width \ 2, y + height \ 2, anchor) Then
+                bounds.left = x: bounds.right = x + width
+                bounds.top = y: bounds.bottom = y + height
+                LiveAccessibleRect = True
+                Exit Function
+            End If
+        End If
+    Next attempt
+Done:
+End Function
+
+Private Function LiveRangeAt(ByVal x As Long, ByVal y As Long) As Range
+    Dim value As Object
+    On Error GoTo Done
+    Set value = ActiveWindow.RangeFromPoint(x, y)
+    If TypeName(value) = "Range" Then Set LiveRangeAt = value
+Done:
+End Function
+
+Private Function LiveMeasuredRect(ByVal grid As LongPtr, ByVal anchor As Range, ByRef bounds As LiveRectangle) As Boolean
+    Dim area As LiveRectangle, hit As Range, x As Long, y As Long, low As Long, high As Long, middle As Long
+    Dim foundRow As Boolean, foundColumn As Boolean, rtl As Boolean
+    On Error GoTo Done
+    If LiveRectangleOf(grid, area) = 0 Then Exit Function
+    x = (area.left + area.right) \ 2
+    low = area.top: high = area.bottom - 1
+    Do While low <= high
+        middle = low + (high - low) \ 2
+        Set hit = LiveRangeAt(x, middle)
+        If hit Is Nothing Then
+            If middle < (area.top + area.bottom) \ 2 Then low = middle + 1 Else high = middle - 1
+        ElseIf hit.Row < anchor.Row Then
+            low = middle + 1
+        ElseIf hit.Row > anchor.Row Then
+            high = middle - 1
+        Else
+            y = middle: foundRow = True: Exit Do
+        End If
+    Loop
+    If Not foundRow Then Exit Function
+    rtl = LiveDropRTL
+    low = area.left: high = area.right - 1
+    Do While low <= high
+        middle = low + (high - low) \ 2
+        Set hit = LiveRangeAt(middle, y)
+        If hit Is Nothing Then
+            If middle < (area.left + area.right) \ 2 Then low = middle + 1 Else high = middle - 1
+        ElseIf hit.Column = anchor.Column Then
+            x = middle: foundColumn = True: Exit Do
+        ElseIf (hit.Column > anchor.Column And rtl) Or (hit.Column < anchor.Column And Not rtl) Then
+            low = middle + 1
+        Else
+            high = middle - 1
+        End If
+    Loop
+    If Not foundColumn Then Exit Function
+    If Not LiveHitCell(x, y, anchor) Then Exit Function
+    low = area.left: high = x
+    Do While low < high
+        middle = low + (high - low) \ 2
+        If LiveHitCell(middle, y, anchor) Then high = middle Else low = middle + 1
+    Loop
+    bounds.left = low
+    low = x: high = area.right - 1
+    Do While low < high
+        middle = low + (high - low + 1) \ 2
+        If LiveHitCell(middle, y, anchor) Then low = middle Else high = middle - 1
+    Loop
+    bounds.right = low + 1
+    low = area.top: high = y
+    Do While low < high
+        middle = low + (high - low) \ 2
+        If LiveHitCell(x, middle, anchor) Then high = middle Else low = middle + 1
+    Loop
+    bounds.top = low
+    low = y: high = area.bottom - 1
+    Do While low < high
+        middle = low + (high - low + 1) \ 2
+        If LiveHitCell(x, middle, anchor) Then low = middle Else high = middle - 1
+    Loop
+    bounds.bottom = low + 1
+    LiveMeasuredRect = True
+Done:
+End Function
+
 Private Sub LivePosition(ByVal anchor As Range, ByVal parentWindow As LongPtr, ByRef popupLeft As Long, ByRef popupTop As Long)
-    Dim x1 As Long, x2 As Long, y1 As Long, y2 As Long, info As LiveMonitor
-    x1 = ActiveWindow.PointsToScreenPixelsX(anchor.Left)
-    x2 = ActiveWindow.PointsToScreenPixelsX(anchor.Left + anchor.Width)
-    y1 = ActiveWindow.PointsToScreenPixelsY(anchor.Top)
-    y2 = ActiveWindow.PointsToScreenPixelsY(anchor.Top + anchor.Height)
-    If x1 < x2 Then LiveDropCell.left = x1: LiveDropCell.right = x2 Else LiveDropCell.left = x2: LiveDropCell.right = x1
-    If y1 < y2 Then LiveDropCell.top = y1: LiveDropCell.bottom = y2 Else LiveDropCell.top = y2: LiveDropCell.bottom = y1
+    Dim grid As LongPtr, info As LiveMonitor, hit As Range
+    LiveStage = "Locate cell " & anchor.Address
+    LiveDropRTL = True
+    On Error Resume Next
     LiveDropRTL = anchor.Worksheet.DisplayRightToLeft
+    Err.Clear
+    On Error GoTo 0
+    grid = LiveGridWindow(parentWindow)
+    If Not LiveAccessibleRect(grid, anchor, LiveDropCell) Then
+        If Not LiveMeasuredRect(grid, anchor, LiveDropCell) Then
+            Err.Raise vbObjectError + 960, "LivePosition", "Cannot locate visible cell " & anchor.Address & "."
+        End If
+    End If
     info.cbSize = LenB(info)
     If LiveMonitorInfo(LiveMonitorFromWindow(parentWindow, 2), info) <> 0 Then
         LiveDropWork = info.work
@@ -665,6 +837,7 @@ Private Function LiveLookup(ByVal customer As Boolean, ByVal seed As String, ByV
     Dim button As LongPtr, parentWindow As LongPtr, errorNumber As Long, errorText As String, status As Long
     On Error GoTo Failed
     parentWindow = Application.hwnd
+    LiveStage = "Read search data"
     Set source = CandidateSource(customer)
     If LastRow(source, 2) < 2 Then Exit Function
     LiveData = source.Range("A2:B" & LastRow(source, 2)).Value2
@@ -676,6 +849,8 @@ Private Function LiveLookup(ByVal customer As Boolean, ByVal seed As String, ByV
         LiveHaystack(i) = Normal(CStr(LiveData(i, 1)) & " " & CStr(LiveData(i, 2)))
     Next i
     LiveFinished = False: LiveChosen = 0: LiveFailure = ""
+    LivePriming = True
+    LiveEdited = False: LiveExitKey = 0: LiveEntryText = ""
     LiveNoResults = UI(5)
     LiveMatchCount = 0
     LiveWindow = 0: LiveEdit = 0: LiveList = 0: LiveCount = 0
@@ -691,12 +866,15 @@ Private Function LiveLookup(ByVal customer As Boolean, ByVal seed As String, ByV
     registered = True
     LivePosition anchor, parentWindow, popupLeft, popupTop
     If customer Then title = UI(71) Else title = UI(72)
+    LiveStage = "Create cell dropdown"
     LiveWindow = LiveCreate(&H80, StrPtr(className), 0, &H80000000, popupLeft, popupTop, 360, 1, parentWindow, 0, instance, 0)
     If LiveWindow = 0 Then Err.Raise vbObjectError + 953, "LiveLookup", "Cannot create search window."
-    LiveEdit = LiveControl("EDIT", "", &H50810080, 0, 0, 100, 22, 1001)
+    LiveEdit = LiveControl("EDIT", "", &H50010080, 0, 0, 100, 22, 1001)
     LiveList = LiveControl("LISTBOX", "", &H50A10101, 0, 22, 360, 24, 1002)
+    LiveStage = "Filter search results"
     LiveWriteText LiveEdit, StrPtr(seed)
-    LiveFilter
+    LivePriming = False
+    LiveInputOnly
     LiveForeground LiveWindow
     LiveFocus LiveEdit
     LiveSend LiveEdit, &HB1, 0, -1
@@ -705,7 +883,12 @@ Private Function LiveLookup(ByVal customer As Boolean, ByVal seed As String, ByV
         If status <= 0 Then Exit Do
         If message.message = &H100 Then
             If message.wParam = 13 Or message.wParam = 9 Then
-                If message.wParam = 9 And LiveMatchCount = 0 Then LiveFinished = True Else LiveConfirm
+                If Not LiveEdited Or Len(Normal(LiveEntryValue())) = 0 Then
+                    LiveExitKey = CLng(message.wParam)
+                    LiveFinished = True
+                ElseIf LiveMatchCount > 0 Then
+                    LiveConfirm
+                End If
                 GoTo NextMessage
             ElseIf message.wParam = 27 Then
                 LiveFinished = True
@@ -720,6 +903,7 @@ Private Function LiveLookup(ByVal customer As Boolean, ByVal seed As String, ByV
         If message.message = &H202 And message.hwnd = LiveList Then LiveConfirm
 NextMessage:
     Loop
+    LiveEntryText = LiveEntryValue()
     If Len(LiveFailure) > 0 Then Err.Raise vbObjectError + 954, "LiveLookup", LiveFailure
     LiveLookup = LiveChosen
 Cleanup:
@@ -1142,21 +1326,38 @@ Private Sub StartSearch(ByVal dest As Range)
     On Error GoTo Failed
     Application.EnableEvents = False
     customer = IsClientCell(dest)
-    dest.Select
     If customer Then Set anchor = WS(MAIN).Range("A8") Else Set anchor = WS(MAIN).Cells(dest.Row, 2)
+    anchor.Select
+    LiveStage = "Read search data"
     selected = LiveLookup(customer, CellText(dest), anchor)
     If selected > 0 Then
         If CodeRow(CandidateSource(customer), CStr(CandidateSource(customer).Cells(selected, 1).Value2)) <> selected Then
             UnicodeMessage UI(8), vbExclamation
         Else
+            LiveStage = "Apply selected record"
             ApplyChoice dest, selected
+        End If
+    ElseIf LiveExitKey = 13 Or LiveExitKey = 9 Then
+        If LiveEdited And Len(Normal(LiveEntryText)) = 0 Then
+            If customer Then
+                WS(MAIN).Range("A8").ClearContents
+                WS(MAIN).Range("B8").MergeArea.ClearContents
+            Else
+                WS(MAIN).Cells(dest.Row, 2).ClearContents
+                WS(MAIN).Cells(dest.Row, 3).MergeArea.ClearContents
+            End If
+        End If
+        If customer Then
+            StartSearch WS(MAIN).Cells(FirstItemRow(), 2)
+        Else
+            WS(MAIN).Cells(dest.Row, 7).Select
         End If
     End If
 Done:
     Application.EnableEvents = oldEvents
     Exit Sub
 Failed:
-    UnicodeMessage UI(6) & vbCrLf & Err.Description, vbExclamation
+    UnicodeMessage UI(6) & vbCrLf & LiveStage & vbCrLf & "Error " & Err.Number & " [" & Err.Source & "]: " & Err.Description, vbExclamation
     Resume Done
 End Sub
 
