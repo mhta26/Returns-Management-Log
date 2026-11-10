@@ -328,12 +328,12 @@ Private Sub RefreshDriver()
         End If
     End If
     formula = DriverFormula()
-    If WS(MAIN).Range("L35").Formula <> formula Then WS(MAIN).Range("L35").Formula = formula
+    If WS(MAIN).Range("L35").formula <> formula Then WS(MAIN).Range("L35").formula = formula
     WS(MAIN).Range("L35").Calculate
     Application.EnableEvents = oldEvents
     Exit Sub
 Failed:
-    errorNumber = Err.Number
+    errorNumber = Err.number
     errorText = Err.Description
     Application.EnableEvents = oldEvents
     Err.Raise errorNumber, "RefreshDriver", errorText
@@ -376,7 +376,7 @@ Public Sub EnterFromNotes()
     Dim current As Excel.Range, destination As Excel.Range
     On Error GoTo Failed
     If Not ActiveWorkbook Is ThisWorkbook Then RestoreEntryMode: Exit Sub
-    If ActiveSheet.Name <> WS(MAIN).Name Then RestoreEntryMode: Exit Sub
+    If ActiveSheet.name <> WS(MAIN).name Then RestoreEntryMode: Exit Sub
     If BusyPrinting Or BusySearching Then Exit Sub
     MouseCommit = False
     If Len(PendingEntryAddress) > 0 Then
@@ -384,7 +384,7 @@ Public Sub EnterFromNotes()
         Exit Sub
     End If
     Set current = ActiveCell.MergeArea.Cells(1, 1)
-    If current.Address = WS(MAIN).Range("L6").Address Then
+    If current.address = WS(MAIN).Range("L6").address Then
         ArchiveAndPrint
         Exit Sub
     End If
@@ -405,7 +405,7 @@ Private Sub BeginEntryMode()
     End If
     Application.MoveAfterReturn = False
     If Not NotesReturnBound Then
-        macroName = "'" & Replace(ThisWorkbook.Name, "'", "''") & "'!Module1.EnterFromNotes"
+        macroName = "'" & Replace(ThisWorkbook.name, "'", "''") & "'!Module1.EnterFromNotes"
         Application.OnKey "~", macroName
         Application.OnKey "{ENTER}", macroName
         NotesReturnBound = True
@@ -442,12 +442,12 @@ Public Sub ConfigureEntryMode()
         RestoreEntryMode
         Exit Sub
     End If
-    If ActiveSheet.Name = WS(MAIN).Name Then BeginEntryMode Else RestoreEntryMode
+    If ActiveSheet.name = WS(MAIN).name Then BeginEntryMode Else RestoreEntryMode
 End Sub
 
 Private Sub QueueEntry(ByVal destination As Excel.Range)
     If MouseCommit Then Exit Sub
-    PendingEntryAddress = destination.MergeArea.Cells(1, 1).Address
+    PendingEntryAddress = destination.MergeArea.Cells(1, 1).address
 End Sub
 
 Private Sub FlushEntry()
@@ -457,7 +457,7 @@ Private Sub FlushEntry()
     PendingEntryAddress = ""
     If MouseCommit Or GetAsyncKeyState(1) < 0 Then Exit Sub
     If Not ActiveWorkbook Is ThisWorkbook Then Exit Sub
-    If ActiveSheet.Name <> WS(MAIN).Name Then Exit Sub
+    If ActiveSheet.name <> WS(MAIN).name Then Exit Sub
     oldEvents = Application.EnableEvents
     On Error GoTo Done
     Application.EnableEvents = False
@@ -469,7 +469,7 @@ End Sub
 Private Function NextEntryCell(ByVal current As Excel.Range) As Excel.Range
     Dim firstRow As Long, totalRow As Long, row As Long, col As Long
     FormRows firstRow, totalRow
-    row = current.Row: col = current.Column
+    row = current.row: col = current.column
     If row = 6 Then
         Select Case col
         Case 2: Set NextEntryCell = WS(MAIN).Range("D6")
@@ -498,7 +498,7 @@ Private Sub TrackEntry()
 End Sub
 
 Public Sub HandleSelection(ByVal Sh As Object, ByVal target As Excel.Range)
-    If Sh.Name <> WS(MAIN).Name Then Exit Sub
+    If Sh.name <> WS(MAIN).name Then Exit Sub
     If BusyPrinting Or BusySearching Then Exit Sub
     PendingEntryAddress = ""
 End Sub
@@ -537,63 +537,63 @@ Private Sub InvalidateSearchCaches()
     ProductCacheReady = False
 End Sub
 
-Private Sub EnsureSearchCache(ByVal customer As Boolean)
-    Dim src As Excel.Worksheet, data As Variant, prepared() As String, index As Object
-    Dim last As Long, i As Long, key As String, ready As Boolean, cachedLast As Long
-    If customer Then
-        ready = ClientCacheReady: cachedLast = ClientCacheLast
+Private Sub EnsureSearchCache(ByVal Customer As Boolean)
+    Dim src As Excel.Worksheet, data As Variant, Prepared() As String, index As Object
+    Dim last As Long, i As Long, key As String, Ready As Boolean, cachedLast As Long
+    If Customer Then
+        Ready = ClientCacheReady: cachedLast = ClientCacheLast
     Else
-        ready = ProductCacheReady: cachedLast = ProductCacheLast
+        Ready = ProductCacheReady: cachedLast = ProductCacheLast
     End If
-    Set src = CandidateSource(customer)
+    Set src = CandidateSource(Customer)
     last = LastRow(src, 2)
-    If ready And cachedLast = last Then Exit Sub
+    If Ready And cachedLast = last Then Exit Sub
     Set index = CreateObject("Scripting.Dictionary")
     index.CompareMode = vbBinaryCompare
     If last >= 2 Then
         data = src.Range("A2:B" & last).Value2
-        ReDim prepared(1 To UBound(data, 1))
+        ReDim Prepared(1 To UBound(data, 1))
         For i = 1 To UBound(data, 1)
             If IsError(data(i, 1)) Or IsError(data(i, 2)) Then
                 data(i, 1) = "": data(i, 2) = ""
             End If
             If Len(Trim$(CStr(data(i, 1)))) > 0 And Len(Trim$(CStr(data(i, 2)))) > 0 Then
                 key = Normal(CStr(data(i, 1)))
-                prepared(i) = Normal(CStr(data(i, 2)) & " " & CStr(data(i, 1)))
+                Prepared(i) = Normal(CStr(data(i, 2)) & " " & CStr(data(i, 1)))
                 If index.Exists(key) Then index(key) = -1 Else index.Add key, i + 1
             End If
         Next i
     Else
-        ReDim prepared(1 To 1)
+        ReDim Prepared(1 To 1)
     End If
-    If customer Then
-        ClientCache = data: ClientCacheKeys = prepared
+    If Customer Then
+        ClientCache = data: ClientCacheKeys = Prepared
         Set ClientCodeIndex = index
         ClientCacheLast = last: ClientCacheReady = True
     Else
-        ProductCache = data: ProductCacheKeys = prepared
+        ProductCache = data: ProductCacheKeys = Prepared
         Set ProductCodeIndex = index
         ProductCacheLast = last: ProductCacheReady = True
     End If
 End Sub
 
-Private Function FilterSearchData(ByVal customer As Boolean, ByVal query As String, ByRef data As Variant, ByRef prepared() As String) As Long
+Private Function FilterSearchData(ByVal Customer As Boolean, ByVal query As String, ByRef data As Variant, ByRef Prepared() As String) As Long
     Dim i As Long, j As Long, count As Long, oldLast As Long, column As Long, rows As Long
     Dim matches() As Long, result() As Variant, tokens As Variant, token As Variant, accepted As Boolean
     Dim listName As String, reference As String, existing As Excel.name, suffix As Boolean
     query = Normal(query)
-    suffix = customer And (Len(query) = 4 Or Len(query) = 5) And Not (query Like "*[!0-9]*")
-    If customer Then column = 27: listName = "InlineClients" Else column = 28: listName = "InlineProducts"
+    suffix = Customer And (Len(query) = 4 Or Len(query) = 5) And Not (query Like "*[!0-9]*")
+    If Customer Then column = 27: listName = "InlineClients" Else column = 28: listName = "InlineProducts"
     tokens = Split(Normal(query), " ")
     If IsArray(data) Then
         rows = UBound(data, 1)
         ReDim matches(1 To rows)
         For i = 1 To rows
-            If Len(prepared(i)) > 0 Then
+            If Len(Prepared(i)) > 0 Then
                 accepted = True
                 For Each token In tokens
                     If Len(token) > 0 Then
-                        If InStr(1, prepared(i), CStr(token), vbBinaryCompare) = 0 Then accepted = False: Exit For
+                        If InStr(1, Prepared(i), CStr(token), vbBinaryCompare) = 0 Then accepted = False: Exit For
                     End If
                 Next token
                 If suffix Then accepted = (Right$(Normal(CStr(data(i, 1))), Len(query)) = query)
@@ -818,12 +818,12 @@ Private Sub RefreshTotals(ByVal firstRow As Long, ByVal totalRow As Long)
     On Error GoTo Failed
     Application.EnableEvents = False
     If Not RulesValid() Then Err.Raise vbObjectError + 941, "RefreshTotals", UI(66)
-    WS(MAIN).Range("I6").Formula = "=NOW()"
+    WS(MAIN).Range("I6").formula = "=NOW()"
     EnsureItemRows firstRow, totalRow
     For c = 7 To 9
-        WS(MAIN).Cells(totalRow, c).Formula = "=SUM(" & WS(MAIN).Range(WS(MAIN).Cells(firstRow, c), WS(MAIN).Cells(totalRow - 1, c)).address(False, False) & ")"
+        WS(MAIN).Cells(totalRow, c).formula = "=SUM(" & WS(MAIN).Range(WS(MAIN).Cells(firstRow, c), WS(MAIN).Cells(totalRow - 1, c)).address(False, False) & ")"
     Next c
-    WS(MAIN).Range("J8").Formula = "=SUMPRODUCT(--(" & WS(MAIN).Range(WS(MAIN).Cells(firstRow, 2), WS(MAIN).Cells(totalRow - 1, 2)).address(False, False) & "<>""""))"
+    WS(MAIN).Range("J8").formula = "=SUMPRODUCT(--(" & WS(MAIN).Range(WS(MAIN).Cells(firstRow, 2), WS(MAIN).Cells(totalRow - 1, 2)).address(False, False) & "<>""""))"
     WS(MAIN).Calculate
     Application.EnableEvents = oldEvents
     Exit Sub
@@ -853,8 +853,8 @@ Private Function IsClientCell(ByVal dest As Excel.Range) As Boolean
     IsClientCell = (dest.row = 8 And (dest.column = 1 Or dest.column = 2))
 End Function
 
-Private Function CandidateSource(ByVal customer As Boolean) As Excel.Worksheet
-    If customer Then Set CandidateSource = WS(CLIENTS) Else Set CandidateSource = WS(PRODUCTS)
+Private Function CandidateSource(ByVal Customer As Boolean) As Excel.Worksheet
+    If Customer Then Set CandidateSource = WS(CLIENTS) Else Set CandidateSource = WS(PRODUCTS)
 End Function
 
 Private Sub SetList(ByVal dest As Excel.Range, ByVal listName As String)
@@ -874,9 +874,9 @@ Private Sub SetList(ByVal dest As Excel.Range, ByVal listName As String)
     If protected Then dest.Worksheet.Protect DrawingObjects:=True, Contents:=True, Scenarios:=True, UserInterfaceOnly:=True, AllowFiltering:=True
 End Sub
 
-Private Function BuildList(ByVal customer As Boolean, ByVal query As String) As Long
-    EnsureSearchCache customer
-    If customer Then
+Private Function BuildList(ByVal Customer As Boolean, ByVal query As String) As Long
+    EnsureSearchCache Customer
+    If Customer Then
         BuildList = FilterSearchData(True, query, ClientCache, ClientCacheKeys)
     Else
         BuildList = FilterSearchData(False, query, ProductCache, ProductCacheKeys)
@@ -884,7 +884,7 @@ Private Function BuildList(ByVal customer As Boolean, ByVal query As String) As 
 End Function
 
 Private Sub ShowList(ByVal dest As Excel.Range)
-    Dim dialog As SearchWindow, sourceRow As Long, customer As Boolean
+    Dim dialog As SearchWindow, sourceRow As Long, Customer As Boolean
     Dim oldBusy As Boolean, oldEvents As Boolean, oldScreen As Boolean, errorText As String
     oldScreen = Application.ScreenUpdating
     oldBusy = BusySearching
@@ -892,9 +892,9 @@ Private Sub ShowList(ByVal dest As Excel.Range)
     On Error GoTo Failed
     BusySearching = True
     Application.EnableEvents = False
-    customer = IsClientCell(dest)
+    Customer = IsClientCell(dest)
     Set dialog = New SearchWindow
-    dialog.Configure customer, CellText(dest)
+    dialog.Configure Customer, CellText(dest)
     Application.ScreenUpdating = True
     dialog.Show vbModal
     sourceRow = dialog.ChosenRow
@@ -927,11 +927,11 @@ Private Sub FillNames()
 End Sub
 
 Private Sub ApplyChoice(ByVal dest As Excel.Range, ByVal sourceRow As Long)
-    Dim customer As Boolean, src As Excel.Worksheet
-    customer = IsClientCell(dest)
-    Set src = CandidateSource(customer)
+    Dim Customer As Boolean, src As Excel.Worksheet
+    Customer = IsClientCell(dest)
+    Set src = CandidateSource(Customer)
     RestoreSearchStatus
-    If customer Then
+    If Customer Then
         WS(MAIN).Range("A8").NumberFormat = "@"
         WS(MAIN).Range("A8").Value2 = CStr(src.Cells(sourceRow, 1).Value2)
         WS(MAIN).Range("B8").Value2 = src.Cells(sourceRow, 2).Value2
@@ -941,32 +941,32 @@ Private Sub ApplyChoice(ByVal dest As Excel.Range, ByVal sourceRow As Long)
         WS(MAIN).Cells(dest.row, 3).Value2 = src.Cells(sourceRow, 2).Value2
 
     End If
-    BuildList customer, ""
+    BuildList Customer, ""
     WS(MAIN).Calculate
 
-    If customer Then
+    If Customer Then
         QueueEntry WS(MAIN).Cells(FirstItemRow(), 3)
     Else
-        QueueEntry WS(MAIN).Cells(dest.Row, 7)
+        QueueEntry WS(MAIN).Cells(dest.row, 7)
     End If
 End Sub
 
 Private Sub SearchChanged(ByVal dest As Excel.Range)
-    Dim customer As Boolean, src As Excel.Worksheet, query As String, code As String
+    Dim Customer As Boolean, src As Excel.Worksheet, query As String, code As String
     Dim p As Long, found As Long, count As Long, c As Long, listName As String
-    customer = IsClientCell(dest)
-    Set src = CandidateSource(customer)
+    Customer = IsClientCell(dest)
+    Set src = CandidateSource(Customer)
     query = CellText(dest)
     PendingNativeDropdown = ""
-    If customer Then c = 27: listName = "InlineClients" Else c = 28: listName = "InlineProducts"
-    If customer Then
+    If Customer Then c = 27: listName = "InlineClients" Else c = 28: listName = "InlineProducts"
+    If Customer Then
         If dest.column = 2 Then WS(MAIN).Range("A8").MergeArea.ClearContents Else WS(MAIN).Range("B8").MergeArea.ClearContents
     Else
         If dest.column = 3 Then WS(MAIN).Cells(dest.row, 2).ClearContents Else WS(MAIN).Cells(dest.row, 3).MergeArea.ClearContents
     End If
     If Len(query) = 0 Then
         RestoreSearchStatus
-        BuildList customer, ""
+        BuildList Customer, ""
         SetList dest, listName
         Exit Sub
     End If
@@ -979,7 +979,7 @@ Private Sub SearchChanged(ByVal dest As Excel.Range)
         ApplyChoice dest, found
         Exit Sub
     End If
-    count = BuildList(customer, query)
+    count = BuildList(Customer, query)
     SetList dest, listName
     If count = 0 Then
         SearchStatus UI(5)
@@ -1015,7 +1015,7 @@ End Sub
 Public Sub HandleChange(ByVal Sh As Object, ByVal target As Excel.Range)
     Dim oldScreen As Boolean
     Dim oldEvents As Boolean, dest As Excel.Range, firstRow As Long, totalRow As Long
-    Dim changed As Excel.Range, cell As Excel.Range, found As Long, customer As Boolean, src As Excel.Worksheet
+    Dim changed As Excel.Range, cell As Excel.Range, found As Long, Customer As Boolean, src As Excel.Worksheet
     Dim query As String, splitAt As Long
     If BusyPrinting Then Exit Sub
     PendingEntryAddress = ""
@@ -1061,13 +1061,13 @@ Public Sub HandleChange(ByVal Sh As Object, ByVal target As Excel.Range)
             Else
                 For Each cell In changed.Cells
                     If cell.address = cell.MergeArea.Cells(1, 1).address Then
-                        customer = IsClientCell(cell)
-                        Set src = CandidateSource(customer)
+                        Customer = IsClientCell(cell)
+                        Set src = CandidateSource(Customer)
                         query = CellText(cell)
                         splitAt = InStrRev(query, " | ")
                         If splitAt > 0 Then query = Left$(query, splitAt - 1)
                         If Len(query) = 0 Then
-                            If customer Then
+                            If Customer Then
                                 If cell.column = 1 Then Sh.Range("B8").MergeArea.ClearContents Else Sh.Range("A8").ClearContents
                             Else
                                 If cell.column = 2 Then Sh.Cells(cell.row, 3).MergeArea.ClearContents Else Sh.Cells(cell.row, 2).ClearContents
@@ -1173,7 +1173,7 @@ End Sub
 Public Sub ProtectFormulaCells()
     Dim sheet As Excel.Worksheet, formulas As Excel.Range, cell As Excel.Range
     For Each sheet In ThisWorkbook.Worksheets
-        If Not IsSavedReceiptSheet(sheet.Name) Then
+        If Not IsSavedReceiptSheet(sheet.name) Then
             sheet.Unprotect
             Set formulas = Nothing
             On Error Resume Next
@@ -1207,7 +1207,7 @@ Public Sub Initialize()
     RefreshTotals firstRow, totalRow
     FitReceiptPage WS(MAIN)
     WS(SETTINGS).Range("E2").value = NextNumber()
-    WS(MAIN).Range("L8").Formula = "=""#""&'" & Replace(WS(SETTINGS).name, "'", "''") & "'!$E$2"
+    WS(MAIN).Range("L8").formula = "=""#""&'" & Replace(WS(SETTINGS).name, "'", "''") & "'!$E$2"
     FillNames
     BuildList True, ""
     BuildList False, ""
@@ -1383,7 +1383,7 @@ Private Sub RestoreCells(ByVal target As Excel.Range, ByVal saved As Variant)
     Dim cell As Excel.Range
     For Each cell In target.Cells
         If cell.address = cell.MergeArea.Cells(1, 1).address Then
-            cell.Formula = saved(cell.row - target.row + 1, cell.column - target.column + 1)
+            cell.formula = saved(cell.row - target.row + 1, cell.column - target.column + 1)
         End If
     Next cell
 End Sub
@@ -1429,13 +1429,13 @@ Public Sub ArchiveAndPrint()
     ' Keep a durable filled-in copy until the PDF is successfully exported.
     ThisWorkbook.Save
     oldCounter = WS(SETTINGS).Range("E2").Value2
-    itemBackup = form.Range(form.Cells(firstRow, 2), form.Cells(totalRow - 1, 10)).Formula
-    noteBackup = form.Range(form.Cells(firstRow, 12), form.Cells(totalRow - 1, 13)).Formula
-    clientCode = form.Range("A8").Formula
-    clientName = form.Range("B8").Formula
-    driverBackup = form.Range("B6").Formula
-    returnBackup = form.Range("D6").Formula
-    invoiceBackup = form.Range("F6").Formula
+    itemBackup = form.Range(form.Cells(firstRow, 2), form.Cells(totalRow - 1, 10)).formula
+    noteBackup = form.Range(form.Cells(firstRow, 12), form.Cells(totalRow - 1, 13)).formula
+    clientCode = form.Range("A8").formula
+    clientName = form.Range("B8").formula
+    driverBackup = form.Range("B6").formula
+    returnBackup = form.Range("D6").formula
+    invoiceBackup = form.Range("F6").formula
     backupReady = True
     BusyPrinting = True
     Application.EnableEvents = False
@@ -1520,12 +1520,12 @@ Failed:
         If resetStarted Then
             RestoreCells form.Range(form.Cells(firstRow, 2), form.Cells(totalRow - 1, 10)), itemBackup
             RestoreCells form.Range(form.Cells(firstRow, 12), form.Cells(totalRow - 1, 13)), noteBackup
-            form.Range("B6").Formula = driverBackup
+            form.Range("B6").formula = driverBackup
             RefreshDriver
-            form.Range("D6").Formula = returnBackup
-            form.Range("F6").Formula = invoiceBackup
-            form.Range("A8").Formula = clientCode
-            form.Range("B8").Formula = clientName
+            form.Range("D6").formula = returnBackup
+            form.Range("F6").formula = invoiceBackup
+            form.Range("A8").formula = clientCode
+            form.Range("B8").formula = clientName
         End If
         WS(SETTINGS).Range("E2").Value2 = oldCounter
         If logRow >= 5 Then
@@ -1625,9 +1625,9 @@ Failed:
     UnicodeMessage UI(26) & vbCrLf & errorText, vbExclamation
 End Sub
 
-Public Function LookupData(ByVal customer As Boolean) As Variant
-    EnsureSearchCache customer
-    If customer Then LookupData = ClientCache Else LookupData = ProductCache
+Public Function LookupData(ByVal Customer As Boolean) As Variant
+    EnsureSearchCache Customer
+    If Customer Then LookupData = ClientCache Else LookupData = ProductCache
 End Function
 
 Public Function NormalizeLookup(ByVal text As String) As String
