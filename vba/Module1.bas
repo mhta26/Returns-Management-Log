@@ -388,11 +388,6 @@ Public Sub EnterFromNotes()
         ArchiveAndPrint
         Exit Sub
     End If
-    If Not Intersect(current, SearchInputCells()) Is Nothing And Len(CellText(current)) = 0 Then
-        StartSearch current
-        FlushEntry
-        Exit Sub
-    End If
     Set destination = NextEntryCell(current)
     If Not destination Is Nothing Then QueueEntry destination
     FlushEntry
@@ -910,6 +905,7 @@ Done:
     Set dialog = Nothing
     Application.EnableEvents = oldEvents
     BusySearching = oldBusy
+    If sourceRow > 0 And Not EntryChangeActive Then FlushEntry
     Exit Sub
 Failed:
     errorText = Err.Description
@@ -950,7 +946,6 @@ Private Sub ApplyChoice(ByVal dest As Excel.Range, ByVal sourceRow As Long)
     Else
         QueueEntry WS(MAIN).Cells(dest.Row, 7)
     End If
-    If Not EntryChangeActive Then PendingEntryAddress = ""
 End Sub
 
 Private Sub SearchChanged(ByVal dest As Excel.Range)
@@ -993,7 +988,6 @@ Private Sub SearchChanged(ByVal dest As Excel.Range)
         If found > 0 Then ApplyChoice dest, found Else UnicodeMessage UI(8), vbExclamation
     Else
         SearchStatus UI(75) & CStr(count)
-        If Not MouseCommit Then ShowList dest
     End If
 End Sub
 
@@ -1022,7 +1016,7 @@ Public Sub HandleChange(ByVal Sh As Object, ByVal target As Excel.Range)
     Dim query As String, splitAt As Long
     If BusyPrinting Then Exit Sub
     PendingEntryAddress = ""
-    MouseCommit = (GetAsyncKeyState(vbKeyReturn) >= 0)
+    MouseCommit = (GetAsyncKeyState(1) < 0)
     EntryChangeActive = True
     CancelNativeDropdown
     oldScreen = Application.ScreenUpdating
@@ -1125,6 +1119,7 @@ Public Sub HandleChange(ByVal Sh As Object, ByVal target As Excel.Range)
         WS(MAIN).Calculate
     End If
 Done:
+    If Not MouseCommit Then FlushEntry
     EntryChangeActive = False
     MouseCommit = False
     Application.ScreenUpdating = oldScreen
@@ -1210,6 +1205,8 @@ Public Sub Initialize()
     Next r
     WS(MAIN).Calculate
 Done:
+    WS(MAIN).Activate
+    WS(MAIN).Range("B6").Select
     Application.EnableEvents = oldEvents
     ProtectFormulaCells
     TrackEntry
