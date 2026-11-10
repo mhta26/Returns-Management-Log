@@ -11,7 +11,30 @@ Private Const PAGE_ROWS As Long = 11
 Private WithEvents ResultScroll As MSForms.ScrollBar
 Private WithEvents AcceptButton As MSForms.CommandButton
 Private WithEvents CancelButton As MSForms.CommandButton
-Private Rows(1 To PAGE_ROWS) As LookupRow
+Private NameRows(1 To PAGE_ROWS) As MSForms.Label, CodeRows(1 To PAGE_ROWS) As MSForms.Label
+Private SlotIndexes(1 To PAGE_ROWS) As Long
+Private WithEvents Name01 As MSForms.Label
+Private WithEvents Code01 As MSForms.Label
+Private WithEvents Name02 As MSForms.Label
+Private WithEvents Code02 As MSForms.Label
+Private WithEvents Name03 As MSForms.Label
+Private WithEvents Code03 As MSForms.Label
+Private WithEvents Name04 As MSForms.Label
+Private WithEvents Code04 As MSForms.Label
+Private WithEvents Name05 As MSForms.Label
+Private WithEvents Code05 As MSForms.Label
+Private WithEvents Name06 As MSForms.Label
+Private WithEvents Code06 As MSForms.Label
+Private WithEvents Name07 As MSForms.Label
+Private WithEvents Code07 As MSForms.Label
+Private WithEvents Name08 As MSForms.Label
+Private WithEvents Code08 As MSForms.Label
+Private WithEvents Name09 As MSForms.Label
+Private WithEvents Code09 As MSForms.Label
+Private WithEvents Name10 As MSForms.Label
+Private WithEvents Code10 As MSForms.Label
+Private WithEvents Name11 As MSForms.Label
+Private WithEvents Code11 As MSForms.Label
 Private DataRows As Variant, Prepared() As String, FilteredRows() As Long
 Private Customer As Boolean, Ready As Boolean, Drawing As Boolean
 Private ResultCount As Long, SelectedIndex As Long
@@ -60,8 +83,9 @@ Private Sub UserForm_Initialize()
         Set label = LabelAt("RowName" & CStr(i), "", 193, 146 + (i - 1) * 24, 479, 24, vbWhite, RGB(38, 55, 74))
         Set code = LabelAt("RowCode" & CStr(i), "", 38, 146 + (i - 1) * 24, 155, 24, vbWhite, RGB(38, 55, 74), False, 10)
         code.TextAlign = 2
-        Set Rows(i) = New LookupRow
-        Rows(i).Attach Me, label, code
+        Set NameRows(i) = label
+        Set CodeRows(i) = code
+        BindRow i, label, code
     Next i
     With Me.Label1
         .Visible = True: .Left = 20: .Top = 421: .Width = 652: .Height = 20
@@ -153,9 +177,9 @@ Private Sub RenderResults()
         index = ResultScroll.Value + slot
         If index <= ResultCount Then
             source = FilteredRows(index)
-            Rows(slot).Display index, CStr(DataRows(source, 2)), CStr(DataRows(source, 1)), (index = SelectedIndex)
+            DisplayRow slot, index, CStr(DataRows(source, 2)), CStr(DataRows(source, 1)), (index = SelectedIndex)
         Else
-            Rows(slot).Display 0, "", "", False
+            DisplayRow slot, 0, "", "", False
         End If
     Next slot
 End Sub
@@ -203,11 +227,246 @@ Private Sub TextBox1_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift
         KeyCode = 0: ChosenRow = 0: Me.Hide
     End If
 End Sub
+Private Sub BindRow(ByVal slot As Long, ByVal title As MSForms.Label, ByVal code As MSForms.Label)
+    Select Case slot
+    Case 1: Set Name01 = title: Set Code01 = code
+    Case 2: Set Name02 = title: Set Code02 = code
+    Case 3: Set Name03 = title: Set Code03 = code
+    Case 4: Set Name04 = title: Set Code04 = code
+    Case 5: Set Name05 = title: Set Code05 = code
+    Case 6: Set Name06 = title: Set Code06 = code
+    Case 7: Set Name07 = title: Set Code07 = code
+    Case 8: Set Name08 = title: Set Code08 = code
+    Case 9: Set Name09 = title: Set Code09 = code
+    Case 10: Set Name10 = title: Set Code10 = code
+    Case 11: Set Name11 = title: Set Code11 = code
+    End Select
+End Sub
+
+Private Sub DisplayRow(ByVal slot As Long, ByVal index As Long, ByVal title As String, ByVal code As String, ByVal selected As Boolean)
+    Dim background As Long, foreground As Long
+    SlotIndexes(slot) = index
+    NameRows(slot).Visible = (index > 0): CodeRows(slot).Visible = (index > 0)
+    If index = 0 Then Exit Sub
+    If selected Then
+        background = RGB(226, 237, 249): foreground = RGB(23, 54, 93)
+    Else
+        If index Mod 2 = 0 Then background = RGB(245, 248, 252) Else background = RGB(255, 255, 255)
+        foreground = RGB(38, 55, 74)
+    End If
+    NameRows(slot).BackColor = background: CodeRows(slot).BackColor = background
+    NameRows(slot).ForeColor = foreground: CodeRows(slot).ForeColor = foreground
+    NameRows(slot).Caption = ChrW(&H200F) & title & "  "
+    CodeRows(slot).Caption = code
+End Sub
+
+Private Sub ChooseSlot(ByVal slot As Long, ByVal confirm As Boolean)
+    If SlotIndexes(slot) > 0 Then SelectResult SlotIndexes(slot), confirm
+End Sub
+
+Private Sub Name01_Click()
+    ChooseSlot 1, False
+End Sub
+
+Private Sub Name01_DblClick(ByVal Cancel As MSForms.ReturnBoolean)
+    Cancel = True
+    ChooseSlot 1, True
+End Sub
+
+Private Sub Code01_Click()
+    ChooseSlot 1, False
+End Sub
+
+Private Sub Code01_DblClick(ByVal Cancel As MSForms.ReturnBoolean)
+    Cancel = True
+    ChooseSlot 1, True
+End Sub
+
+Private Sub Name02_Click()
+    ChooseSlot 2, False
+End Sub
+
+Private Sub Name02_DblClick(ByVal Cancel As MSForms.ReturnBoolean)
+    Cancel = True
+    ChooseSlot 2, True
+End Sub
+
+Private Sub Code02_Click()
+    ChooseSlot 2, False
+End Sub
+
+Private Sub Code02_DblClick(ByVal Cancel As MSForms.ReturnBoolean)
+    Cancel = True
+    ChooseSlot 2, True
+End Sub
+
+Private Sub Name03_Click()
+    ChooseSlot 3, False
+End Sub
+
+Private Sub Name03_DblClick(ByVal Cancel As MSForms.ReturnBoolean)
+    Cancel = True
+    ChooseSlot 3, True
+End Sub
+
+Private Sub Code03_Click()
+    ChooseSlot 3, False
+End Sub
+
+Private Sub Code03_DblClick(ByVal Cancel As MSForms.ReturnBoolean)
+    Cancel = True
+    ChooseSlot 3, True
+End Sub
+
+Private Sub Name04_Click()
+    ChooseSlot 4, False
+End Sub
+
+Private Sub Name04_DblClick(ByVal Cancel As MSForms.ReturnBoolean)
+    Cancel = True
+    ChooseSlot 4, True
+End Sub
+
+Private Sub Code04_Click()
+    ChooseSlot 4, False
+End Sub
+
+Private Sub Code04_DblClick(ByVal Cancel As MSForms.ReturnBoolean)
+    Cancel = True
+    ChooseSlot 4, True
+End Sub
+
+Private Sub Name05_Click()
+    ChooseSlot 5, False
+End Sub
+
+Private Sub Name05_DblClick(ByVal Cancel As MSForms.ReturnBoolean)
+    Cancel = True
+    ChooseSlot 5, True
+End Sub
+
+Private Sub Code05_Click()
+    ChooseSlot 5, False
+End Sub
+
+Private Sub Code05_DblClick(ByVal Cancel As MSForms.ReturnBoolean)
+    Cancel = True
+    ChooseSlot 5, True
+End Sub
+
+Private Sub Name06_Click()
+    ChooseSlot 6, False
+End Sub
+
+Private Sub Name06_DblClick(ByVal Cancel As MSForms.ReturnBoolean)
+    Cancel = True
+    ChooseSlot 6, True
+End Sub
+
+Private Sub Code06_Click()
+    ChooseSlot 6, False
+End Sub
+
+Private Sub Code06_DblClick(ByVal Cancel As MSForms.ReturnBoolean)
+    Cancel = True
+    ChooseSlot 6, True
+End Sub
+
+Private Sub Name07_Click()
+    ChooseSlot 7, False
+End Sub
+
+Private Sub Name07_DblClick(ByVal Cancel As MSForms.ReturnBoolean)
+    Cancel = True
+    ChooseSlot 7, True
+End Sub
+
+Private Sub Code07_Click()
+    ChooseSlot 7, False
+End Sub
+
+Private Sub Code07_DblClick(ByVal Cancel As MSForms.ReturnBoolean)
+    Cancel = True
+    ChooseSlot 7, True
+End Sub
+
+Private Sub Name08_Click()
+    ChooseSlot 8, False
+End Sub
+
+Private Sub Name08_DblClick(ByVal Cancel As MSForms.ReturnBoolean)
+    Cancel = True
+    ChooseSlot 8, True
+End Sub
+
+Private Sub Code08_Click()
+    ChooseSlot 8, False
+End Sub
+
+Private Sub Code08_DblClick(ByVal Cancel As MSForms.ReturnBoolean)
+    Cancel = True
+    ChooseSlot 8, True
+End Sub
+
+Private Sub Name09_Click()
+    ChooseSlot 9, False
+End Sub
+
+Private Sub Name09_DblClick(ByVal Cancel As MSForms.ReturnBoolean)
+    Cancel = True
+    ChooseSlot 9, True
+End Sub
+
+Private Sub Code09_Click()
+    ChooseSlot 9, False
+End Sub
+
+Private Sub Code09_DblClick(ByVal Cancel As MSForms.ReturnBoolean)
+    Cancel = True
+    ChooseSlot 9, True
+End Sub
+
+Private Sub Name10_Click()
+    ChooseSlot 10, False
+End Sub
+
+Private Sub Name10_DblClick(ByVal Cancel As MSForms.ReturnBoolean)
+    Cancel = True
+    ChooseSlot 10, True
+End Sub
+
+Private Sub Code10_Click()
+    ChooseSlot 10, False
+End Sub
+
+Private Sub Code10_DblClick(ByVal Cancel As MSForms.ReturnBoolean)
+    Cancel = True
+    ChooseSlot 10, True
+End Sub
+
+Private Sub Name11_Click()
+    ChooseSlot 11, False
+End Sub
+
+Private Sub Name11_DblClick(ByVal Cancel As MSForms.ReturnBoolean)
+    Cancel = True
+    ChooseSlot 11, True
+End Sub
+
+Private Sub Code11_Click()
+    ChooseSlot 11, False
+End Sub
+
+Private Sub Code11_DblClick(ByVal Cancel As MSForms.ReturnBoolean)
+    Cancel = True
+    ChooseSlot 11, True
+End Sub
+
 Public Sub ReleaseRows()
     Dim i As Long
     For i = 1 To PAGE_ROWS
-        If Not Rows(i) Is Nothing Then Rows(i).Detach
-        Set Rows(i) = Nothing
+        BindRow i, Nothing, Nothing
+        Set NameRows(i) = Nothing: Set CodeRows(i) = Nothing
     Next i
 End Sub
 Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
