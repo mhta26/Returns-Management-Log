@@ -432,7 +432,6 @@ Public Sub ConfigureEntryMode()
         Exit Sub
     End If
     If ActiveSheet.Name = WS(MAIN).Name Then BeginEntryMode Else RestoreEntryMode
-    ProtectFormulaCells
 End Sub
 
 Private Sub QueueEntry(ByVal destination As Excel.Range)
@@ -490,7 +489,7 @@ End Sub
 Public Sub HandleSelection(ByVal Sh As Object, ByVal target As Excel.Range)
     If Sh.Name <> WS(MAIN).Name Then Exit Sub
     If BusyPrinting Or BusySearching Then Exit Sub
-    If GetAsyncKeyState(1) < 0 Then PendingEntryAddress = ""
+    PendingEntryAddress = ""
 End Sub
 
 
@@ -935,7 +934,7 @@ Private Sub ApplyChoice(ByVal dest As Excel.Range, ByVal sourceRow As Long)
     Else
         QueueEntry WS(MAIN).Cells(dest.Row, 7)
     End If
-    If Not EntryChangeActive Then FlushEntry
+    If Not EntryChangeActive Then PendingEntryAddress = ""
 End Sub
 
 Private Sub SearchChanged(ByVal dest As Excel.Range)
@@ -978,7 +977,7 @@ Private Sub SearchChanged(ByVal dest As Excel.Range)
         If found > 0 Then ApplyChoice dest, found Else UnicodeMessage UI(8), vbExclamation
     Else
         SearchStatus UI(75) & CStr(count)
-        ShowList dest
+        If Not MouseCommit Then ShowList dest
     End If
 End Sub
 
@@ -1006,13 +1005,12 @@ Public Sub HandleChange(ByVal Sh As Object, ByVal target As Excel.Range)
     Dim query As String, splitAt As Long
     If BusyPrinting Then Exit Sub
     PendingEntryAddress = ""
-    MouseCommit = (GetAsyncKeyState(1) < 0)
+    MouseCommit = (GetAsyncKeyState(vbKeyReturn) >= 0)
     EntryChangeActive = True
     CancelNativeDropdown
     oldEvents = Application.EnableEvents
     On Error GoTo Failed
     Application.EnableEvents = False
-    WS(MAIN).Unprotect
     If Sh.name = WS(MAIN).name Then
         BeginEntryMode
         If Not Intersect(target, Sh.Range("B6")) Is Nothing Then
@@ -1111,7 +1109,6 @@ Done:
     EntryChangeActive = False
     FlushEntry
     MouseCommit = False
-    ProtectFormulaCells
     Application.EnableEvents = oldEvents
     ConfigureEntryMode
     Exit Sub
