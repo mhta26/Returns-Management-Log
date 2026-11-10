@@ -10,11 +10,20 @@ Public BusySearching As Boolean
 Private EntryChangeActive As Boolean, MouseCommit As Boolean
 
 #If VBA7 Then
+Private Declare PtrSafe Function FindWindowW Lib "user32" (ByVal className As LongPtr, ByVal title As LongPtr) As LongPtr
+Private Declare PtrSafe Function GetWindowLongW Lib "user32" (ByVal hwnd As LongPtr, ByVal index As Long) As Long
+Private Declare PtrSafe Function SetWindowLongW Lib "user32" (ByVal hwnd As LongPtr, ByVal index As Long, ByVal value As Long) As Long
+Private Declare PtrSafe Function SetWindowPos Lib "user32" (ByVal hwnd As LongPtr, ByVal after As LongPtr, ByVal x As Long, ByVal y As Long, ByVal cx As Long, ByVal cy As Long, ByVal flags As Long) As Long
+
 Private Declare PtrSafe Function GetAsyncKeyState Lib "user32" (ByVal key As Long) As Integer
 Private Declare PtrSafe Function MessageBoxW Lib "user32" (ByVal hwnd As LongPtr, ByVal text As LongPtr, ByVal caption As LongPtr, ByVal flags As Long) As Long
 Private Declare PtrSafe Function GetFileAttributesW Lib "kernel32" (ByVal path As LongPtr) As Long
 Private Declare PtrSafe Function ShellExecuteW Lib "shell32" (ByVal hwnd As LongPtr, ByVal operation As LongPtr, ByVal file As LongPtr, ByVal parameters As LongPtr, ByVal directory As LongPtr, ByVal show As Long) As LongPtr
 #Else
+Private Declare Function FindWindowW Lib "user32" (ByVal className As Long, ByVal title As Long) As Long
+Private Declare Function GetWindowLongW Lib "user32" (ByVal hwnd As Long, ByVal index As Long) As Long
+Private Declare Function SetWindowLongW Lib "user32" (ByVal hwnd As Long, ByVal index As Long, ByVal value As Long) As Long
+Private Declare Function SetWindowPos Lib "user32" (ByVal hwnd As Long, ByVal after As Long, ByVal x As Long, ByVal y As Long, ByVal cx As Long, ByVal cy As Long, ByVal flags As Long) As Long
 Private Declare Function GetAsyncKeyState Lib "user32" (ByVal key As Long) As Integer
 Private Declare Function MessageBoxW Lib "user32" (ByVal hwnd As Long, ByVal text As Long, ByVal caption As Long, ByVal flags As Long) As Long
 Private Declare Function GetFileAttributesW Lib "kernel32" (ByVal path As Long) As Long
@@ -1654,3 +1663,23 @@ Public Function LookupCaption(ByVal item As Long) As String
     End Select
 End Function
 
+
+Public Function StyleLookupRTL(ByVal title As String) As Boolean
+#If VBA7 Then
+    Dim hwnd As LongPtr
+#Else
+    Dim hwnd As Long
+#End If
+    Dim className As String, flags As Long
+    className = "ThunderDFrame"
+    hwnd = FindWindowW(StrPtr(className), StrPtr(title))
+    If hwnd = 0 Then
+        className = "ThunderXFrame"
+        hwnd = FindWindowW(StrPtr(className), StrPtr(title))
+    End If
+    If hwnd = 0 Then Exit Function
+    flags = GetWindowLongW(hwnd, -20)
+    SetWindowLongW hwnd, -20, flags Or &H400000 Or &H2000
+    SetWindowPos hwnd, 0, 0, 0, 0, 0, &H27
+    StyleLookupRTL = True
+End Function
