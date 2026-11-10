@@ -7,7 +7,6 @@ Private Const PRODUCTS As Long = 3
 Private Const SETTINGS As Long = 5
 Private Const DRIVERS As Long = 4
 Public BusySearching As Boolean
-Private MenuChoice As Long, MenuPage As Long
 
 #If VBA7 Then
 Private Declare PtrSafe Function MessageBoxW Lib "user32" (ByVal hwnd As LongPtr, ByVal text As LongPtr, ByVal caption As LongPtr, ByVal flags As Long) As Long
@@ -776,68 +775,32 @@ Private Function BuildList(ByVal customer As Boolean, ByVal query As String) As 
     End If
 End Function
 
-Public Sub ChooseSearchResult()
-    MenuChoice = CLng(Application.CommandBars.ActionControl.Tag)
-End Sub
-
 Private Sub ShowList(ByVal dest As Excel.Range)
-    Dim menu As Object, button As Object, i As Long, last As Long, column As Long
-    Dim previousBusy As Boolean, previousEvents As Boolean, query As String, chosen As Long, sourceRow As Long
-    Dim customer As Boolean, value As String, message As String
-    previousBusy = BusySearching
-    previousEvents = Application.EnableEvents
+    Dim dialog As SearchWindow, sourceRow As Long, customer As Boolean
+    Dim oldBusy As Boolean, oldEvents As Boolean, errorText As String
+    oldBusy = BusySearching
+    oldEvents = Application.EnableEvents
     On Error GoTo Failed
     BusySearching = True
     Application.EnableEvents = False
     customer = IsClientCell(dest)
-    If customer Then column = 27 Else column = 28
-    last = WS(MAIN).Cells(WS(MAIN).Rows.Count, column).End(xlUp).Row
-    MenuPage = 2
-    Do
-        Set menu = Application.CommandBars.Add(Position:=5, Temporary:=True)
-        MenuChoice = 0
-        For i = MenuPage To Application.Min(MenuPage + 29, last)
-            Set button = menu.Controls.Add(Type:=1)
-            value = CStr(WS(MAIN).Cells(i, column).Value2)
-            button.Caption = Replace(Left$(value, 250), "&", "&&")
-            button.Tag = CStr(i)
-            button.OnAction = "'" & Replace(ThisWorkbook.Name, "'", "''") & "'!Module1.ChooseSearchResult"
-        Next i
-        If MenuPage > 2 Then
-            Set button = menu.Controls.Add(Type:=1)
-            button.Caption = "< 30": button.Tag = "-1"
-            button.OnAction = "'" & Replace(ThisWorkbook.Name, "'", "''") & "'!Module1.ChooseSearchResult"
-        End If
-        If MenuPage + 29 < last Then
-            Set button = menu.Controls.Add(Type:=1)
-            button.Caption = "30 >": button.Tag = "-2"
-            button.OnAction = "'" & Replace(ThisWorkbook.Name, "'", "''") & "'!Module1.ChooseSearchResult"
-        End If
-        menu.ShowPopup
-        menu.Delete: Set menu = Nothing
-        If MenuChoice = -1 Then
-            MenuPage = Application.Max(2, MenuPage - 30)
-        ElseIf MenuChoice = -2 Then
-            MenuPage = MenuPage + 30
-        Else
-            Exit Do
-        End If
-    Loop
-    If MenuChoice >= 2 Then
-        value = CStr(WS(MAIN).Cells(MenuChoice, column).Value2)
-        query = Left$(value, InStrRev(value, " | ") - 1)
-        sourceRow = CodeRow(CandidateSource(customer), query)
-        If sourceRow > 0 Then ApplyChoice dest, sourceRow
-    End If
+    Set dialog = New SearchWindow
+    dialog.Configure customer, CellText(dest)
+    dialog.Show vbModal
+    sourceRow = dialog.ChosenRow
+    Unload dialog
+    Set dialog = Nothing
+    If sourceRow > 0 Then ApplyChoice dest, sourceRow
 Done:
     On Error Resume Next
-    If Not menu Is Nothing Then menu.Delete
-    Application.EnableEvents = previousEvents
-    BusySearching = previousBusy
+    If Not dialog Is Nothing Then Unload dialog
+    Set dialog = Nothing
+    Application.EnableEvents = oldEvents
+    BusySearching = oldBusy
     Exit Sub
 Failed:
-    message = Err.Description
-    UnicodeMessage UI(6) & vbCrLf & message, vbExclamation
+    errorText = Err.Description
+    UnicodeMessage UI(6) & vbCrLf & errorText, vbExclamation
     Resume Done
 End Sub
 
@@ -916,22 +879,7 @@ Private Sub SearchChanged(ByVal dest As Excel.Range)
 End Sub
 
 Private Sub StartSearch(ByVal dest As Excel.Range)
-    Dim oldEvents As Boolean, customer As Boolean, listName As String
-    oldEvents = Application.EnableEvents
-    On Error GoTo Failed
-    Application.EnableEvents = False
-    RestoreSearchStatus
-    customer = IsClientCell(dest)
-    If customer Then listName = "InlineClients" Else listName = "InlineProducts"
-    BuildList customer, ""
-    SetList dest, listName
-    dest.Select
-    Application.EnableEvents = oldEvents
     ShowList dest
-    Exit Sub
-Failed:
-    Application.EnableEvents = oldEvents
-    UnicodeMessage UI(6) & vbCrLf & Err.Description, vbExclamation
 End Sub
 
 Public Sub SearchProducts()
@@ -1541,3 +1489,25 @@ Failed:
     BusyPrinting = previousBusy
     UnicodeMessage UI(26) & vbCrLf & errorText, vbExclamation
 End Sub
+
+Public Function LookupData(ByVal customer As Boolean) As Variant
+    EnsureSearchCache customer
+    If customer Then LookupData = ClientCache Else LookupData = ProductCache
+End Function
+
+Public Function NormalizeLookup(ByVal text As String) As String
+    NormalizeLookup = Normal(text)
+End Function
+
+Public Function LookupCaption(ByVal item As Long) As String
+    Select Case item
+    Case 1: LookupCaption = DecodeText("0628 062D 062B 0020 0627 0644 0639 0645 0644 0627 0621 0020 2014 0020 0627 0644 0627 0633 0645 0020 0623 0648 0020 0627 0644 0643 0648 062F 0020 0623 0648 0020 0622 062E 0631 0020 0034 2013 0035 0020 0623 0631 0642 0627 0645")
+    Case 2: LookupCaption = DecodeText("0628 062D 062B 0020 0627 0644 0623 0635 0646 0627 0641 0020 2014 0020 0627 0644 0627 0633 0645 0020 0623 0648 0020 0627 0644 0643 0648 062F")
+    Case 3: LookupCaption = DecodeText("0639 062F 062F 0020 0627 0644 0646 062A 0627 0626 062C 003A 0020")
+    Case 4: LookupCaption = DecodeText("0627 0643 062A 0628 0020 0644 0644 0628 062D 062B 0020 2022 0020 0627 0644 0623 0633 0647 0645 0020 0644 0644 062A 0646 0642 0644 0020 2022 0020 0045 006E 0074 0065 0072 0020 0644 0644 0627 062E 062A 064A 0627 0631 0020 2022 0020 0045 0073 0063 0020 0644 0644 0625 0644 063A 0627 0621")
+    Case 5: LookupCaption = DecodeText("0627 062E 062A 064A 0627 0631")
+    Case 6: LookupCaption = DecodeText("0625 0644 063A 0627 0621")
+    Case 7: LookupCaption = DecodeText("0644 0627 0020 062A 0648 062C 062F 0020 0646 062A 0627 0626 062C 0020 0645 0637 0627 0628 0642 0629 061B 0020 0639 062F 0651 0644 0020 0646 0635 0020 0627 0644 0628 062D 062B 002E")
+    End Select
+End Function
+
