@@ -771,7 +771,7 @@ Private Sub SetList(ByVal dest As Excel.Range, ByVal listName As String)
         .InputTitle = ""
         .InputMessage = ""
     End With
-    If protected Then dest.Worksheet.Protect DrawingObjects:=True, Contents:=True, Scenarios:=True, UserInterfaceOnly:=True, AllowFiltering:=True
+    If protected Then dest.Worksheet.Protect DrawingObjects:=True, Contents:=True, Scenarios:=True, UserInterfaceOnly:=True, AllowFormattingCells:=True, AllowFormattingColumns:=False, AllowFormattingRows:=False, AllowFiltering:=True
 End Sub
 
 Private Function BuildList(ByVal Customer As Boolean, ByVal query As String) As Long
@@ -1081,16 +1081,12 @@ Failed:
 End Sub
 
 Public Sub ProtectFormulaCells()
-    Dim sheet As Excel.Worksheet, receipt As Excel.Worksheet
-    Set receipt = WS(MAIN)
+    Dim sheet As Excel.Worksheet
     For Each sheet In ThisWorkbook.Worksheets
-        If Not IsSavedReceiptSheet(sheet.name) Then
-            If sheet.CodeName = receipt.CodeName Or sheet.ProtectContents Then
-                sheet.Protect DrawingObjects:=True, Contents:=True, Scenarios:=True, UserInterfaceOnly:=True, AllowFiltering:=True
-                sheet.EnableSelection = xlNoRestrictions
-            End If
-        End If
+        sheet.Protect DrawingObjects:=True, Contents:=True, Scenarios:=True, UserInterfaceOnly:=True, AllowFormattingCells:=True, AllowFormattingColumns:=False, AllowFormattingRows:=False, AllowFiltering:=True
+        sheet.EnableSelection = xlNoRestrictions
     Next sheet
+    ThisWorkbook.Protect Structure:=True, Windows:=False
 End Sub
 
 Private Sub BindSearchButtons()
@@ -1253,11 +1249,28 @@ Private Sub CloseReceiptCopy(ByRef temporary As Excel.Workbook)
     On Error GoTo 0
 End Sub
 
+Private Sub CopyReceiptForPrinting()
+    Dim structureWasProtected As Boolean, errorNumber As Long, errorText As String
+    structureWasProtected = ThisWorkbook.ProtectStructure
+    On Error GoTo Failed
+    If structureWasProtected Then ThisWorkbook.Unprotect
+    WS(MAIN).Copy
+    If structureWasProtected Then ThisWorkbook.Protect Structure:=True, Windows:=False
+    Exit Sub
+Failed:
+    errorNumber = Err.Number
+    errorText = Err.Description
+    On Error Resume Next
+    If structureWasProtected Then ThisWorkbook.Protect Structure:=True, Windows:=False
+    On Error GoTo 0
+    Err.Raise errorNumber, "CopyReceiptForPrinting", errorText
+End Sub
+
 Private Sub PrepareReceiptCopy(ByVal number As Long, ByVal totalRow As Long, ByRef temporary As Excel.Workbook, ByRef receipt As Excel.Worksheet)
     Dim address As String, i As Long, lookupLast As Long, usedLast As Long
     address = "A1:M36"
     WS(MAIN).Calculate
-    WS(MAIN).Copy
+    CopyReceiptForPrinting
     Set temporary = Application.ActiveWorkbook
     Set receipt = temporary.Worksheets(1)
     receipt.Unprotect
