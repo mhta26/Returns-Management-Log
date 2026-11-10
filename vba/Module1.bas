@@ -315,7 +315,11 @@ Private Function DriverValid() As Boolean
 End Function
 
 Private Sub RefreshDriver()
-    Dim found As Long
+    Dim found As Long, formula As String, oldEvents As Boolean
+    Dim errorNumber As Long, errorText As String
+    oldEvents = Application.EnableEvents
+    On Error GoTo Failed
+    Application.EnableEvents = False
     found = CodeRow(WS(DRIVERS), CellText(WS(MAIN).Range("B6")))
     If found > 0 Then
         If CStr(WS(MAIN).Range("B6").Value2) <> CStr(WS(DRIVERS).Cells(found, 1).Value2) Then
@@ -323,8 +327,16 @@ Private Sub RefreshDriver()
             WS(MAIN).Range("B6").Value2 = CStr(WS(DRIVERS).Cells(found, 1).Value2)
         End If
     End If
-    WS(MAIN).Range("L35").Formula = DriverFormula()
+    formula = DriverFormula()
+    If WS(MAIN).Range("L35").Formula <> formula Then WS(MAIN).Range("L35").Formula = formula
     WS(MAIN).Range("L35").Calculate
+    Application.EnableEvents = oldEvents
+    Exit Sub
+Failed:
+    errorNumber = Err.Number
+    errorText = Err.Description
+    Application.EnableEvents = oldEvents
+    Err.Raise errorNumber, "RefreshDriver", errorText
 End Sub
 
 Private Function DriverFormula() As String
@@ -367,6 +379,10 @@ Public Sub EnterFromNotes()
     If ActiveSheet.Name <> WS(MAIN).Name Then RestoreEntryMode: Exit Sub
     If BusyPrinting Or BusySearching Then Exit Sub
     MouseCommit = False
+    If Len(PendingEntryAddress) > 0 Then
+        FlushEntry
+        Exit Sub
+    End If
     Set current = ActiveCell.MergeArea.Cells(1, 1)
     If current.Address = WS(MAIN).Range("L6").Address Then
         ArchiveAndPrint
@@ -1000,6 +1016,7 @@ Public Sub SearchClients()
 End Sub
 
 Public Sub HandleChange(ByVal Sh As Object, ByVal target As Excel.Range)
+    Dim oldScreen As Boolean
     Dim oldEvents As Boolean, dest As Excel.Range, firstRow As Long, totalRow As Long
     Dim changed As Excel.Range, cell As Excel.Range, found As Long, customer As Boolean, src As Excel.Worksheet
     Dim query As String, splitAt As Long
@@ -1008,9 +1025,11 @@ Public Sub HandleChange(ByVal Sh As Object, ByVal target As Excel.Range)
     MouseCommit = (GetAsyncKeyState(vbKeyReturn) >= 0)
     EntryChangeActive = True
     CancelNativeDropdown
+    oldScreen = Application.ScreenUpdating
     oldEvents = Application.EnableEvents
     On Error GoTo Failed
     Application.EnableEvents = False
+    Application.ScreenUpdating = False
     If Sh.name = WS(MAIN).name Then
         BeginEntryMode
         If Not Intersect(target, Sh.Range("B6")) Is Nothing Then
@@ -1107,12 +1126,12 @@ Public Sub HandleChange(ByVal Sh As Object, ByVal target As Excel.Range)
     End If
 Done:
     EntryChangeActive = False
-    FlushEntry
     MouseCommit = False
+    Application.ScreenUpdating = oldScreen
     Application.EnableEvents = oldEvents
-    ConfigureEntryMode
     Exit Sub
 Failed:
+    Application.ScreenUpdating = oldScreen
     UnicodeMessage UI(6) & vbCrLf & Err.Description, vbExclamation
     Resume Done
 End Sub
