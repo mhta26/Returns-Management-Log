@@ -23,9 +23,7 @@ Private Declare Function ShellExecuteW Lib "shell32" (ByVal hwnd As Long, ByVal 
 #End If
 
 Private EntryModeActive As Boolean, PreviousReturnEnabled As Boolean, PreviousReturnDirection As Long
-Private PendingEntryAddress As String, LastEntryRow As Long, LastEntryColumn As Long
-Private PendingNativeDropdown As String
-Private DropdownScheduled As Boolean, DropdownTime As Date, DropdownProcedure As String, DropdownAddress As String, DropdownFiltered As Boolean
+Private PendingEntryAddress As String
 Private NotesReturnBound As Boolean
 
 Private ClientCache As Variant, ProductCache As Variant
@@ -33,6 +31,9 @@ Private ClientCacheKeys() As String, ProductCacheKeys() As String
 Private ClientCodeIndex As Object, ProductCodeIndex As Object
 Private ClientCacheReady As Boolean, ProductCacheReady As Boolean
 Private ClientCacheLast As Long, ProductCacheLast As Long
+Private ClientListReady As Boolean, ProductListReady As Boolean
+Private ClientListQuery As String, ProductListQuery As String
+Private ClientListCount As Long, ProductListCount As Long
 Private SearchStatusOwned As Boolean, OriginalSearchStatus As Variant
 
 
@@ -81,6 +82,7 @@ Private Function DecodeText(ByVal encoded As String) As String
 End Function
 
 Private Function UI(ByVal n As Long) As String
+    If n = 81 Then UI = DecodeText("062A 0645 0020 062D 0641 0638 0020 0627 0644 0633 0646 062F 0020 0648 0625 0631 0633 0627 0644 0647 0020 0644 0644 0637 0627 0628 0639 0629 060C 0020 0644 0643 0646 0020 062A 0639 0630 0631 0020 062D 0641 0638 0020 062A 062D 062F 064A 062B 0020 062D 0627 0644 0629 0020 0627 0644 0637 0628 0627 0639 0629 0020 0641 064A 0020 0627 0644 0623 0631 0634 064A 0641 002E "): Exit Function
     If n = 75 Then UI = DecodeText("0646 062A 0627 0626 062C 0020 0627 0644 0628 062D 062B 0020 2014 0020 0627 062E 062A 0631 0020 0645 0646 0020 0627 0644 0642 0627 0626 0645 0629 003A 0020"): Exit Function
     If n = 37 Then UI = WarehouseFormula(): Exit Function
     If n >= 62 And n <= 65 Then UI = Trim$(CStr(WS(SETTINGS).Cells(n - 60, 2).Value2)): Exit Function
@@ -101,33 +103,16 @@ Private Function UI(ByVal n As Long) As String
     UI = CStr(WS(SETTINGS).Cells(n, 8).value)
     If Len(UI) > 0 Then Exit Function
     Select Case n
-    Case 2
-        UI = DecodeText("0627 0644 0633 0646 062F 0020 0645 0645 062A 0644 0626 002E 0020 0644 0625 0636 0627 0641 0629 0020 0635 0646 0641 0020 062C 062F 064A 062F 0020 0623 " & _
-            "062F 0631 062C 0020 0635 0641 064B 0627 0020 0641 0648 0642 0020 0627 0644 0625 062C 0645 0627 0644 064A 060C 0020 062B 0645 0020 0627 0643 062A 0628 " & _
-            "0020 0627 0633 0645 0020 0627 0644 0635 0646 0641 0020 0623 0648 0020 0643 0648 062F 0647 0020 0641 064A 0020 0627 0644 0635 0641 0020 0627 0644 062C " & _
-            "062F 064A 062F 002E")
-    Case 3
-        UI = DecodeText("0639 062F 062F 0020 0627 0644 0646 062A 0627 0626 062C 003A")
-    Case 4
-        UI = DecodeText("0627 0643 062A 0628 0020 062C 0632 0621 064B 0627 0020 0645 0646 0020 0627 0644 0627 0633 0645 0020 062B 0645 0020 0045 006E 0074 0065 0072 060C 0020 " & _
-            "0648 0627 062E 062A 0631 0020 0627 0644 0646 062A 064A 062C 0629 0020 0645 0646 0020 0627 0644 0633 0647 0645 0020 0623 0648 0020 0041 006C 0074 002B " & _
-            "0627 0644 0633 0647 0645 0020 0644 0623 0633 0641 0644 002E")
     Case 5
         UI = DecodeText("0644 0627 0020 062A 0648 062C 062F 0020 0646 062A 0627 0626 062C 0020 0645 0637 0627 0628 0642 0629 002E 0020 062A 062D 0642 0642 0020 0645 0646 0020 " & _
             "0627 0644 0627 0633 0645 0020 0623 0648 0020 0623 0636 0641 0020 0627 0644 0633 062C 0644 0020 0625 0644 0649 0020 0642 0627 0639 062F 0629 0020 0627 " & _
             "0644 0628 064A 0627 0646 0627 062A 002E")
     Case 6
         UI = DecodeText("062A 0639 0630 0631 0020 062A 062D 062F 064A 062B 0020 0646 062A 0627 0626 062C 0020 0627 0644 0628 062D 062B 002E")
-    Case 7
-        UI = DecodeText("0627 062E 062A 0631 0020 0627 0644 0635 0646 0641 0020 0645 0646 0020 0639 0645 0648 062F 0020 0627 0644 0643 0648 062F 0020 0623 0648 0020 0627 0644 " & _
-            "0627 0633 0645 0020 062F 0627 062E 0644 0020 062C 062F 0648 0644 0020 0627 0644 0633 0646 062F 002E")
     Case 8
         UI = DecodeText("0643 0648 062F 0020 0627 0644 0639 0645 064A 0644 0020 0623 0648 0020 0627 0644 0635 0646 0641 0020 0645 0641 0642 0648 062F 0020 0623 0648 0020 0645 " & _
             "0643 0631 0631 002E 0020 0631 0627 062C 0639 0020 0642 0627 0639 062F 0629 0020 0627 0644 0628 064A 0627 0646 0627 062A 0020 0648 062D 062F 0651 062B " & _
             "0020 0627 0644 0628 062D 062B 002E")
-    Case 9
-        UI = DecodeText("064A 0648 062C 062F 0020 0627 062E 062A 064A 0627 0631 0020 0633 0627 0628 0642 0020 0641 064A 0020 0647 0630 0627 0020 0627 0644 0645 0648 0636 0639 " & _
-            "002E 0020 0647 0644 0020 062A 0631 064A 062F 0020 0627 0633 062A 0628 062F 0627 0644 0647 061F")
     Case 10
         UI = DecodeText("0627 062E 062A 0631 0020 0627 0644 0639 0645 064A 0644 0020 0642 0628 0644 0020 0627 0644 0637 0628 0627 0639 0629 002E")
     Case 11
@@ -142,48 +127,15 @@ Private Function UI(ByVal n As Long) As String
     Case 14
         UI = DecodeText("0627 0644 0645 0644 0641 0020 0644 0644 0642 0631 0627 0621 0629 0020 0641 0642 0637 002E 0020 0627 062D 0641 0638 0020 0646 0633 062E 0629 0020 0642 " & _
             "0627 0628 0644 0629 0020 0644 0644 062A 0639 062F 064A 0644 0020 0623 0648 0644 0627 064B 002E")
-    Case 15
-        UI = DecodeText("0627 062D 0641 0638 0020 0627 0644 0645 0635 0646 0641 0020 0628 0635 064A 063A 0629 0020 0058 004C 0053 004D 0020 0642 0628 0644 0020 0627 0644 0637 " & _
-            "0628 0627 0639 0629 002E")
-    Case 16
-        UI = DecodeText("0627 062E 062A 0631 0020 0637 0631 064A 0642 0629 0020 0627 0644 0625 062E 0631 0627 062C 003A 000A 0646 0639 0645 003A 0020 0637 0628 0627 0639 0629 " & _
-            "0020 0639 0644 0649 0020 0627 0644 0637 0627 0628 0639 0629 0020 0645 0639 0020 062D 0641 0638 0020 0050 0044 0046 002E 000A 0644 0627 003A 0020 062D " & _
-            "0641 0638 0020 0050 0044 0046 0020 0641 0642 0637 002E 000A 0625 0644 063A 0627 0621 003A 0020 0627 0644 0631 062C 0648 0639 0020 062F 0648 0646 0020 " & _
-            "062A 063A 064A 064A 0631 002E 000A 064A 064F 062D 0641 0638 0020 0050 0044 0046 0020 0628 062C 0627 0646 0628 0020 0627 0644 0645 0635 0646 0641 060C " & _
-            "0020 062B 0645 0020 062A 064F 0641 0631 0651 063A 0020 0627 0644 0645 062F 062E 0644 0627 062A 0020 0648 064A 064F 062D 0641 0638 0020 0627 0644 0631 " & _
-            "0642 0645 0020 0627 0644 062A 0627 0644 064A 0020 0628 0639 062F 0020 0646 062C 0627 062D 0020 0627 0644 062D 0641 0638 002E")
-    Case 17
-        UI = DecodeText("0645 062D 0641 0648 0638 0020 2014 0020 0644 0645 0020 064A 064F 0631 0633 0644 0020 0644 0644 0637 0627 0628 0639 0629 0020 0628 0639 062F")
-    Case 18
-        UI = DecodeText("0623 064F 0631 0633 0644 0020 0644 0644 0637 0627 0628 0639 0629")
-    Case 19
-        UI = DecodeText("062D 064F 0641 0638 0020 0627 0644 0633 0646 062F 0020 0648 0623 064F 0631 0633 0644 0020 0644 0644 0637 0627 0628 0639 0629 003A")
     Case 20
         UI = DecodeText("062A 0645 0020 062A 0641 0631 064A 063A 0020 062E 0627 0646 0627 062A 0020 0627 0644 0633 0646 062F 0020 0648 062D 0641 0638 0020 0627 0644 0645 0644 " & _
             "0641 0020 0627 0644 0631 0626 064A 0633 064A 0020 0628 0627 0644 0631 0642 0645 0020 0627 0644 062A 0627 0644 064A 002E")
-    Case 21
-        UI = DecodeText("0645 062D 0641 0648 0638 0020 2014 0020 0623 0639 062F 0020 0627 0644 0637 0628 0627 0639 0629 0020 0645 0646 0020 0627 0644 0623 0631 0634 064A 0641")
-    Case 22
-        UI = DecodeText("0627 0644 0646 0633 062E 0629 0020 0645 062D 0641 0648 0638 0629 0020 0648 0627 0644 0633 0646 062F 0020 0627 0644 062A 0627 0644 064A 0020 062C 0627 " & _
-            "0647 0632 060C 0020 0644 0643 0646 0020 062A 0639 0630 0631 0020 0625 0643 0645 0627 0644 0020 0627 0644 0637 0628 0627 0639 0629 002E 0020 0623 0639 " & _
-            "062F 0020 0627 0644 0637 0628 0627 0639 0629 0020 0645 0646 0020 0627 0644 0623 0631 0634 064A 0641 003A")
-    Case 23
-        UI = DecodeText("062D 064F 0641 0638 0020 0627 0644 0623 0631 0634 064A 0641 060C 0020 0644 0643 0646 0020 062A 0639 0630 0631 0020 0625 0643 0645 0627 0644 0020 062A " & _
-            "062C 0647 064A 0632 0020 0623 0648 0020 062D 0641 0638 0020 0627 0644 0633 0646 062F 0020 0627 0644 062A 0627 0644 064A 002E 0020 0644 0627 0020 062A " & _
-            "063A 0644 0642 0020 0627 0644 0645 0644 0641 0020 0642 0628 0644 0020 0645 0631 0627 062C 0639 0629 0020 0627 0644 062D 0641 0638 002E 0020 0627 0644 " & _
-            "0646 0633 062E 0629 003A")
-    Case 24
-        UI = DecodeText("0644 0645 0020 062A 0643 062A 0645 0644 0020 0627 0644 0623 0631 0634 0641 0629 002E 0020 0644 0645 0020 062A 064F 0645 0633 062D 0020 0645 062F 062E " & _
-            "0644 0627 062A 0643 002E 0020 062A 062D 0642 0642 0020 0645 0646 0020 0625 0645 0643 0627 0646 064A 0629 0020 0627 0644 062D 0641 0638 0020 062B 0645 " & _
-            "0020 0623 0639 062F 0020 0627 0644 0645 062D 0627 0648 0644 0629 002E")
     Case 25
         UI = DecodeText("0627 0646 0642 0631 0020 0631 0627 0628 0637 0020 0050 0044 0046 0020 0641 064A 0020 0627 0644 0623 0631 0634 064A 0641 0020 0644 0641 062A 062D 0020 " & _
             "0627 0644 0633 0646 062F 0020 0648 0625 0639 0627 062F 0629 0020 0637 0628 0627 0639 062A 0647 002E")
     Case 26
         UI = DecodeText("062A 0639 0630 0631 0020 0641 062A 062D 0020 0627 0644 0633 0646 062F 0020 0627 0644 0645 062D 0641 0648 0638 0020 0644 0644 0637 0628 0627 0639 0629 " & _
             "002E")
-    Case 28
-        UI = DecodeText("0628 062D 062B 0020 0628 0627 0644 0627 0633 0645 0020 0623 0648 0020 0627 0644 0643 0648 062F")
     Case 29
         UI = DecodeText("062A 0639 0630 0631 0020 062A 062D 062F 064A 062F 0020 0628 062F 0627 064A 0629 0020 0627 0644 0623 0635 0646 0627 0641 0020 0648 0635 0641 0020 0627 " & _
             "0644 0625 062C 0645 0627 0644 064A 0020 0628 0623 0645 0627 0646 002E 0020 062A 0623 0643 062F 0020 0645 0646 0020 0628 0642 0627 0621 0020 0639 0646 " & _
@@ -193,50 +145,19 @@ Private Function UI(ByVal n As Long) As String
         UI = DecodeText("0643 0648 062F 0020 0627 0644 0635 0646 0641")
     Case 31
         UI = DecodeText("0627 0644 0625 062C 0645 0627 0644 064A")
-    Case 37
-        UI = DecodeText("003D 0049 0046 0028 0052 0043 005B 002D 0031 005D 003D 0022 0022 002C 0022 0022 002C 0049 0046 0045 0052 0052 004F 0052 0028 0049 0046 0028 004F 0052 " & _
-            "0028 004E 004F 0054 0028 0049 0053 004E 0055 004D 0042 0045 0052 0028 0052 0043 005B 002D 0031 005D 0029 0029 002C 0052 0043 005B 002D 0031 005D 003C " & _
-            "003D 0030 002C 0052 0043 005B 002D 0031 005D 003E 0032 0039 0035 0038 0034 0036 0035 0029 002C 0022 062A 0627 0631 064A 062E 0020 063A 064A 0631 0020 " & _
-            "0635 062D 064A 062D 0022 002C 0049 0046 0028 0049 004E 0054 0028 0052 0043 005B 002D 0031 005D 0029 002D 0049 004E 0054 0028 0052 0036 0043 0039 0029 " & _
-            "003C 003D 0034 0035 002C 0022 0645 0646 062A 0647 064A 0022 002C 0049 0046 0028 0049 004E 0054 0028 0052 0043 005B 002D 0031 005D 0029 002D 0049 004E " & _
-            "0054 0028 0052 0036 0043 0039 0029 003C 003D 0039 0030 002C 0022 0642 0631 064A 0628 0020 0627 0644 0635 0644 0627 062D 064A 0629 0022 002C 0049 0046 " & _
-            "0028 0049 004E 0054 0028 0052 0043 005B 002D 0031 005D 0029 002D 0049 004E 0054 0028 0052 0036 0043 0039 0029 003C 003D 0032 0037 0030 002C 0022 0645 " & _
-            "0633 062A 0648 062F 0639 0020 0627 0644 062A 0648 0627 0644 0641 0022 002C 0022 0635 0627 0644 062D 0022 0029 0029 0029 0029 002C 0022 062A 0627 0631 " & _
-            "064A 062E 0020 063A 064A 0631 0020 0635 062D 064A 062D 0022 0029 0029")
     Case 38
         UI = DecodeText("0633 062C 0644 0020 0645 0631 062A 062C 0639")
-    Case 39
-        UI = DecodeText("062D 0641 0638 0020 0627 0644 0633 0646 062F 0020 0628 0635 064A 063A 0629 0020 0050 0044 0046")
-    Case 40
-        UI = DecodeText("064A 0648 062C 062F 0020 0645 0644 0641 0020 0628 0627 0644 0627 0633 0645 0020 0646 0641 0633 0647 002E 0020 0647 0644 0020 062A 0631 064A 062F 0020 " & _
-            "0627 0633 062A 0628 062F 0627 0644 0647 061F")
-    Case 41
-        UI = DecodeText("0645 062D 0641 0648 0638 0020 0628 0627 0644 0623 0631 0634 064A 0641 0020 2014 0020 0644 0645 0020 064A 0643 062A 0645 0644 0020 062D 0641 0638 0020 " & _
-            "0050 0044 0046")
     Case 42
         UI = DecodeText("062D 064F 0641 0638 0020 0645 0644 0641 0020 0050 0044 0046")
-    Case 43
-        UI = DecodeText("062D 064F 0641 0638 0020 0627 0644 0633 0646 062F 0020 0641 064A 0020 0627 0644 0623 0631 0634 064A 0641 0020 0648 0645 0644 0641 0020 0050 0044 0046 " & _
-            "003A")
-    Case 44
-        UI = DecodeText("0627 0644 0633 0646 062F 0020 0645 062D 0641 0648 0638 0020 0641 064A 0020 0627 0644 0623 0631 0634 064A 0641 060C 0020 0644 0643 0646 0020 062A 0639 " & _
-            "0630 0631 0020 062D 0641 0638 0020 0050 0044 0046 002E 0020 0623 0639 062F 0020 062A 0635 062F 064A 0631 0647 0020 0645 0646 0020 0627 0644 0623 0631 " & _
-            "0634 064A 0641 003A")
     Case 45
         UI = DecodeText("0050 0044 0046 0020 0645 062D 0641 0648 0638 0020 2014 0020 0623 064F 0631 0633 0644 0020 0644 0644 0637 0627 0628 0639 0629")
     Case 46
         UI = DecodeText("0050 0044 0046 0020 0645 062D 0641 0648 0638 0020 2014 0020 062A 0639 0630 0631 062A 0020 0627 0644 0637 0628 0627 0639 0629 0020 0627 0644 0648 0631 " & _
             "0642 064A 0629")
-    Case 47
-        UI = DecodeText("0631 0642 0645 0020 0627 0644 0641 0627 062A 0648 0631 0629 0020 0627 0644 0623 0635 0644 064A")
-    Case 48
-        UI = DecodeText("0627 0644 0643 0645 064A 0629")
     Case 49
         UI = DecodeText("0627 062D 0641 0638 0020 0627 0644 0645 0635 0646 0641 0020 0641 064A 0020 0645 062C 0644 062F 0020 0645 062D 0644 064A 0020 0623 0648 0644 064B 0627 " & _
             "0020 062D 062A 0649 0020 064A 0645 0643 0646 0020 062D 0641 0638 0020 0645 0644 0641 0627 062A 0020 0050 0044 0046 0020 0628 062C 0627 0646 0628 0647 " & _
             "002E")
-    Case 51
-        UI = DecodeText("062D 064F 0641 0638 0020 0050 0044 0046 0020 0628 062C 0627 0646 0628 0020 0627 0644 0645 0644 0641 0020 0627 0644 0631 0626 064A 0633 064A 003A")
     Case 52
         UI = DecodeText("062D 064F 0641 0638 0020 0050 0044 0046 060C 0020 0644 0643 0646 0020 062A 0639 0630 0631 0020 0625 0643 0645 0627 0644 0020 062D 0641 0638 0020 0627 " & _
             "0644 0645 0635 0646 0641 0020 0628 0627 0644 062D 0627 0644 0629 0020 0627 0644 062C 062F 064A 062F 0629 002E 0020 0623 064F 0639 064A 062F 062A 0020 " & _
@@ -268,14 +189,6 @@ Private Function UI(ByVal n As Long) As String
     Case 61
         UI = DecodeText("0623 062F 062E 0644 0020 0639 062F 062F 0020 0646 0633 062E 0020 0635 062D 064A 062D 064B 0627 0020 0645 0646 0020 0031 0020 0625 0644 0649 0020 0039 " & _
             "0039 0039 060C 0020 0623 0648 0020 0627 0636 063A 0637 0020 0625 0644 063A 0627 0621 0020 0644 0644 0631 062C 0648 0639 002E")
-    Case 62
-        UI = DecodeText("0645 0646 062A 0647 064A")
-    Case 63
-        UI = DecodeText("0642 0631 064A 0628 0020 0627 0644 0635 0644 0627 062D 064A 0629")
-    Case 64
-        UI = DecodeText("0645 0633 062A 0648 062F 0639 0020 0627 0644 062A 0648 0627 0644 0641")
-    Case 65
-        UI = DecodeText("0635 0627 0644 062D")
     End Select
 End Function
 
@@ -370,9 +283,6 @@ Public Sub ReleaseNotesReturn()
     NotesReturnBound = False
 End Sub
 
-Private Sub UpdateNotesReturn()
-End Sub
-
 Public Sub EnterFromNotes()
     Dim current As Excel.Range, destination As Excel.Range
     On Error GoTo Failed
@@ -424,17 +334,6 @@ Public Sub RestoreEntryMode()
     EntryChangeActive = False
     PendingEntryAddress = ""
     MouseCommit = False
-End Sub
-
-Public Sub CancelNativeDropdown()
-    DropdownScheduled = False
-    DropdownAddress = ""
-End Sub
-
-Private Sub ScheduleNativeDropdown()
-End Sub
-
-Public Sub OpenPendingDropdown()
 End Sub
 
 Public Sub ConfigureEntryMode()
@@ -495,9 +394,6 @@ Private Function NextEntryCell(ByVal current As Excel.Range) As Excel.Range
     End If
 End Function
 
-Private Sub TrackEntry()
-End Sub
-
 Public Sub HandleSelection(ByVal Sh As Object, ByVal target As Excel.Range)
     If Sh.name <> WS(MAIN).name Then Exit Sub
     If BusyPrinting Or BusySearching Then Exit Sub
@@ -536,6 +432,8 @@ End Function
 Private Sub InvalidateSearchCaches()
     ClientCacheReady = False
     ProductCacheReady = False
+    ClientListReady = False
+    ProductListReady = False
 End Sub
 
 Private Sub EnsureSearchCache(ByVal Customer As Boolean)
@@ -549,6 +447,7 @@ Private Sub EnsureSearchCache(ByVal Customer As Boolean)
     Set src = CandidateSource(Customer)
     last = LastRow(src, 2)
     If Ready And cachedLast = last Then Exit Sub
+    If Customer Then ClientListReady = False Else ProductListReady = False
     Set index = CreateObject("Scripting.Dictionary")
     index.CompareMode = vbBinaryCompare
     If last >= 2 Then
@@ -661,7 +560,7 @@ Private Function CodeRow(ByVal src As Excel.Worksheet, ByVal code As String) As 
     End If
     For r = 2 To LastRow(src, 2)
         If Not IsError(src.Cells(r, 1).Value2) And Not IsError(src.Cells(r, 2).Value2) Then
-            If Normal(CStr(src.Cells(r, 1).Value2)) = key And Len(CStr(src.Cells(r, 2).Value2)) > 0 Then
+            If Normal(CStr(src.Cells(r, 1).Value2)) = key And Len(Trim$(CStr(src.Cells(r, 2).Value2))) > 0 Then
                 If found > 0 Then CodeRow = -1: Exit Function
                 found = r
             End If
@@ -876,11 +775,19 @@ Private Sub SetList(ByVal dest As Excel.Range, ByVal listName As String)
 End Sub
 
 Private Function BuildList(ByVal Customer As Boolean, ByVal query As String) As Long
+    Dim normalized As String
     EnsureSearchCache Customer
+    normalized = Normal(query)
     If Customer Then
-        BuildList = FilterSearchData(True, query, ClientCache, ClientCacheKeys)
+        If ClientListReady And ClientListQuery = normalized Then BuildList = ClientListCount: Exit Function
+        ClientListCount = FilterSearchData(True, query, ClientCache, ClientCacheKeys)
+        ClientListQuery = normalized: ClientListReady = True
+        BuildList = ClientListCount
     Else
-        BuildList = FilterSearchData(False, query, ProductCache, ProductCacheKeys)
+        If ProductListReady And ProductListQuery = normalized Then BuildList = ProductListCount: Exit Function
+        ProductListCount = FilterSearchData(False, query, ProductCache, ProductCacheKeys)
+        ProductListQuery = normalized: ProductListReady = True
+        BuildList = ProductListCount
     End If
 End Function
 
@@ -962,7 +869,6 @@ Private Sub SearchChanged(ByVal dest As Excel.Range)
     Customer = IsClientCell(dest)
     Set src = CandidateSource(Customer)
     query = CellText(dest)
-    PendingNativeDropdown = ""
     If Customer Then c = 27: listName = "InlineClients" Else c = 28: listName = "InlineProducts"
     If Customer Then
         If dest.column = 2 Then WS(MAIN).Range("A8").MergeArea.ClearContents Else WS(MAIN).Range("B8").MergeArea.ClearContents
@@ -1026,7 +932,6 @@ Public Sub HandleChange(ByVal Sh As Object, ByVal target As Excel.Range)
     PendingEntryAddress = ""
     MouseCommit = (GetAsyncKeyState(1) < 0)
     EntryChangeActive = True
-    CancelNativeDropdown
     oldScreen = Application.ScreenUpdating
     oldEvents = Application.EnableEvents
     On Error GoTo Failed
@@ -1197,14 +1102,21 @@ Public Sub ProtectFormulaCells()
 End Sub
 
 Private Sub BindSearchButtons()
-    Dim prefix As String
+    Dim prefix As String, button As Object
     prefix = "'" & Replace(ThisWorkbook.Name, "'", "''") & "'!Module1."
-    WS(MAIN).Shapes("btn_SearchClient").OnAction = prefix & "SearchClients"
-    WS(MAIN).Shapes("btn_SearchProduct").OnAction = prefix & "SearchProducts"
+    On Error Resume Next
+    Set button = WS(MAIN).Shapes("btn_SearchClient")
+    On Error GoTo 0
+    If Not button Is Nothing Then button.OnAction = prefix & "SearchClients"
+    Set button = Nothing
+    On Error Resume Next
+    Set button = WS(MAIN).Shapes("btn_SearchProduct")
+    On Error GoTo 0
+    If Not button Is Nothing Then button.OnAction = prefix & "SearchProducts"
 End Sub
 
 Public Sub Initialize()
-    Dim oldEvents As Boolean, r As Long, firstRow As Long, totalRow As Long
+    Dim oldEvents As Boolean, r As Long, firstRow As Long, totalRow As Long, errorText As String
     oldEvents = Application.EnableEvents
     On Error GoTo Failed
     Application.EnableEvents = False
@@ -1234,13 +1146,16 @@ Public Sub Initialize()
 Done:
     WS(MAIN).Activate
     WS(MAIN).Range("B6").Select
-    Application.EnableEvents = oldEvents
     ProtectFormulaCells
-    TrackEntry
+    Application.EnableEvents = oldEvents
     Exit Sub
 Failed:
-    UnicodeMessage UI(6) & vbCrLf & Err.Description, vbExclamation
-    Resume Done
+    errorText = Err.Description
+    On Error Resume Next
+    RestoreEntryMode
+    Application.EnableEvents = oldEvents
+    On Error GoTo 0
+    UnicodeMessage UI(6) & vbCrLf & errorText, vbExclamation
 End Sub
 
 Private Function NextNumber() As Long
@@ -1312,7 +1227,7 @@ Private Function ValidForm() As Boolean
 End Function
 
 Private Function ReceiptFileName(ByVal number As Long, Optional ByVal customerName As String = "") As String
-    Dim baseName As String, suffix As String, bad As Variant, i As Long
+    Dim baseName As String, bad As Variant, i As Long
     baseName = Trim$(customerName)
     If Len(baseName) = 0 Then baseName = CellText(WS(MAIN).Range("B8"))
     For Each bad In Array("\", "/", ":", "*", "?", Chr$(34), "<", ">", "|")
@@ -1401,10 +1316,27 @@ Private Sub RestoreCells(ByVal target As Excel.Range, ByVal saved As Variant)
     Next cell
 End Sub
 
+Private Sub KeepReceipt(ByVal receipt As Excel.Worksheet, ByVal number As Long, ByRef saved As Excel.Worksheet)
+    receipt.Copy After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count)
+    Set saved = ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.Count)
+    saved.Name = "RET_" & Format$(number, "000000")
+    saved.Protect DrawingObjects:=True, Contents:=True, Scenarios:=True
+End Sub
+
+Private Sub RemoveUncommittedReceipt(ByVal saved As Excel.Worksheet)
+    Dim previousAlerts As Boolean
+    previousAlerts = Application.DisplayAlerts
+    On Error Resume Next
+    Application.DisplayAlerts = False
+    If Not saved Is Nothing Then saved.Delete
+    Application.DisplayAlerts = previousAlerts
+    On Error GoTo 0
+End Sub
+
 Public Sub ArchiveAndPrint()
-    Dim form As Excel.Worksheet, log As Excel.Worksheet, receipt As Excel.Worksheet, temporary As Excel.Workbook
+    Dim form As Excel.Worksheet, log As Excel.Worksheet, receipt As Excel.Worksheet, temporary As Excel.Workbook, saved As Excel.Worksheet
     Dim firstRow As Long, totalRow As Long, number As Long, logRow As Long
-    Dim pdfPath As String, relativeName As String, paper As Boolean, errorText As String, paperError As String
+    Dim pdfPath As String, relativeName As String, paper As Boolean, errorText As String, paperError As String, statusError As String
     Dim oldEvents As Boolean, oldScreen As Boolean, oldCounter As Variant
     Dim oldCalculation As Excel.XlCalculation
     Dim itemBackup As Variant, noteBackup As Variant, clientCode As Variant, clientName As Variant
@@ -1459,6 +1391,7 @@ Public Sub ArchiveAndPrint()
     PrepareReceiptCopy number, totalRow, temporary, receipt
     ExportReceiptPDF receipt, pdfPath
     pdfSaved = True
+    KeepReceipt receipt, number, saved
     logRow = LastRow(log, 15) + 1
     If logRow < 5 Then logRow = 5
     If logRow > 5 Then
@@ -1467,6 +1400,7 @@ Public Sub ArchiveAndPrint()
         Application.CutCopyMode = False
     End If
     log.Cells(logRow, 1).Value2 = number
+    log.Hyperlinks.Add Anchor:=log.Cells(logRow, 1), Address:="", SubAddress:="'" & saved.Name & "'!A1", TextToDisplay:=CStr(number)
     log.Cells(logRow, 2).value = Now
     log.Cells(logRow, 2).NumberFormat = "yyyy-mm-dd hh:mm"
     log.Cells(logRow, 3).NumberFormat = "@"
@@ -1513,6 +1447,10 @@ Public Sub ArchiveAndPrint()
         If Len(paperError) = 0 Then log.Cells(logRow, 9).Value2 = UI(45) Else log.Cells(logRow, 9).Value2 = UI(46)
         On Error Resume Next
         ThisWorkbook.Save
+        If Err.Number <> 0 Then
+            statusError = Err.Description
+            Err.Clear
+        End If
         On Error GoTo Failed
     End If
     CloseReceiptCopy temporary
@@ -1523,13 +1461,16 @@ Public Sub ArchiveAndPrint()
     form.Activate
     form.Range("B6").Select
     If Len(paperError) > 0 Then
-        UnicodeMessage UI(46) & vbCrLf & pdfPath & vbCrLf & paperError & vbCrLf & UI(20), vbExclamation
+        UnicodeMessage UI(46) & vbCrLf & pdfPath & vbCrLf & paperError & vbCrLf & statusError & vbCrLf & UI(20), vbExclamation
+    ElseIf Len(statusError) > 0 Then
+        UnicodeMessage UI(81) & vbCrLf & statusError, vbExclamation
     End If
     Exit Sub
 Failed:
     errorText = Err.Description
     On Error Resume Next
     If Not committed And backupReady Then
+        RemoveUncommittedReceipt saved
         If resetStarted Then
             RestoreCells form.Range(form.Cells(firstRow, 2), form.Cells(totalRow - 1, 10)), itemBackup
             RestoreCells form.Range(form.Cells(firstRow, 12), form.Cells(totalRow - 1, 13)), noteBackup
@@ -1665,3 +1606,7 @@ Public Function LookupCaption(ByVal item As Long) As String
 End Function
 
 
+
+Public Function IsMainSheet(ByVal sheet As Object) As Boolean
+    If TypeOf sheet Is Excel.Worksheet Then IsMainSheet = (sheet.CodeName = WS(MAIN).CodeName)
+End Function

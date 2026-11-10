@@ -26,7 +26,7 @@ End Sub
 
 Private Sub Workbook_BeforePrint(Cancel As Boolean)
     If Module1.BusyPrinting Then Exit Sub
-    If ActiveSheet.name = ThisWorkbook.Worksheets(1).name Then
+    If Module1.IsMainSheet(ActiveSheet) Then
         Cancel = True
         Module1.ArchiveAndPrint
     ElseIf Module1.IsSavedReceiptSheet(ActiveSheet.name) Then
@@ -50,7 +50,5 @@ End Sub
 
 Private Sub Workbook_BeforeClose(Cancel As Boolean)
     Module1.RestoreEntryMode
-    Module1.CancelNativeDropdown
-    Module1.ReleaseNotesReturn
     Module1.RestoreSearchStatus
 End Sub

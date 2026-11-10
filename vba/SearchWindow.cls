@@ -195,7 +195,16 @@ Public Sub SelectResult(ByVal index As Long, ByVal confirm As Boolean)
     If confirm Then ConfirmChoice Else Me.TextBox1.SetFocus
 End Sub
 Private Sub ResultScroll_Change()
-    If Ready And Not Drawing Then RenderResults
+    If Not Ready Or Drawing Then Exit Sub
+    If ResultCount > 0 Then
+        If SelectedIndex <= ResultScroll.Value Or SelectedIndex > ResultScroll.Value + PAGE_ROWS Then
+            SelectedIndex = ResultScroll.Value + 1
+        End If
+    End If
+    RenderResults
+End Sub
+Private Sub ResultScroll_Scroll()
+    ResultScroll_Change
 End Sub
 Private Sub ConfirmChoice()
     If SelectedIndex < 1 Or SelectedIndex > ResultCount Then Exit Sub
@@ -258,6 +267,8 @@ Private Sub DisplayRow(ByVal slot As Long, ByVal index As Long, ByVal title As S
     NameRows(slot).ForeColor = foreground: CodeRows(slot).ForeColor = foreground
     NameRows(slot).Caption = ChrW(&H200F) & title & "  "
     CodeRows(slot).Caption = code
+    NameRows(slot).ControlTipText = title
+    CodeRows(slot).ControlTipText = code
 End Sub
 
 Private Sub ChooseSlot(ByVal slot As Long, ByVal confirm As Boolean)
@@ -464,6 +475,7 @@ End Sub
 
 Public Sub ReleaseRows()
     Dim i As Long
+    On Error Resume Next
     For i = 1 To PAGE_ROWS
         BindRow i, Nothing, Nothing
         Set NameRows(i) = Nothing: Set CodeRows(i) = Nothing
