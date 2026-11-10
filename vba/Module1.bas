@@ -1001,7 +1001,7 @@ End Sub
 
 Public Sub SearchProducts()
     If ActiveSheet.name <> WS(MAIN).name Then Exit Sub
-    If ActiveCell.row >= FirstItemRow() And ActiveCell.row <= LastItemRow() And (ActiveCell.column = 2 Or ActiveCell.column = 3) Then
+    If ActiveCell.row >= FirstItemRow() And ActiveCell.row <= LastItemRow() Then
         StartSearch WS(MAIN).Cells(ActiveCell.row, 3)
     Else
         StartSearch ProductSearchTarget()
@@ -1191,12 +1191,20 @@ Public Sub ProtectFormulaCells()
     Next sheet
 End Sub
 
+Private Sub BindSearchButtons()
+    Dim prefix As String
+    prefix = "'" & Replace(ThisWorkbook.Name, "'", "''") & "'!Module1."
+    WS(MAIN).Shapes("btn_SearchClient").OnAction = prefix & "SearchClients"
+    WS(MAIN).Shapes("btn_SearchProduct").OnAction = prefix & "SearchProducts"
+End Sub
+
 Public Sub Initialize()
     Dim oldEvents As Boolean, r As Long, firstRow As Long, totalRow As Long
     oldEvents = Application.EnableEvents
     On Error GoTo Failed
     Application.EnableEvents = False
     WS(MAIN).Unprotect
+    BindSearchButtons
     InvalidateSearchCaches
     RestoreSearchStatus
     BeginEntryMode
