@@ -804,7 +804,7 @@ Private Sub ShowList(ByVal dest As Excel.Range)
     Set dialog = New SearchWindow
     dialog.Configure Customer, CellText(dest)
     Application.ScreenUpdating = True
-    dialog.Show vbModal
+    dialog.show vbModal
     sourceRow = dialog.ChosenRow
     dialog.ReleaseRows
     Unload dialog
@@ -1062,7 +1062,7 @@ Public Sub HandleDoubleClick(ByVal Sh As Object, ByVal target As Excel.Range, By
             Cancel = True
             PendingEntryAddress = ""
             MouseCommit = False
-            StartSearch Sh.Cells(clicked.Row, 3)
+            StartSearch Sh.Cells(clicked.row, 3)
         End If
     ElseIf IsSavedReceiptSheet(Sh.name) Then
         If Not Intersect(target, Sh.Range("J11:K11")) Is Nothing Then
@@ -1084,7 +1084,7 @@ Public Sub ProtectFormulaCells()
     Dim sheet As Excel.Worksheet, receipt As Excel.Worksheet
     Set receipt = WS(MAIN)
     For Each sheet In ThisWorkbook.Worksheets
-        If Not IsSavedReceiptSheet(sheet.Name) Then
+        If Not IsSavedReceiptSheet(sheet.name) Then
             If sheet.CodeName = receipt.CodeName Or sheet.ProtectContents Then
                 sheet.Protect DrawingObjects:=True, Contents:=True, Scenarios:=True, UserInterfaceOnly:=True, AllowFiltering:=True
                 sheet.EnableSelection = xlNoRestrictions
@@ -1095,7 +1095,7 @@ End Sub
 
 Private Sub BindSearchButtons()
     Dim prefix As String, button As Object
-    prefix = "'" & Replace(ThisWorkbook.Name, "'", "''") & "'!Module1."
+    prefix = "'" & Replace(ThisWorkbook.name, "'", "''") & "'!Module1."
     On Error Resume Next
     Set button = WS(MAIN).Shapes("btn_SearchClient")
     On Error GoTo 0
@@ -1285,7 +1285,7 @@ End Sub
 Private Sub ExportReceiptPDF(ByVal receipt As Excel.Worksheet, ByVal path As String)
     receipt.ExportAsFixedFormat Type:=xlTypePDF, fileName:=path, Quality:=xlQualityStandard, IncludeDocProperties:=True, IgnorePrintAreas:=False, OpenAfterPublish:=False
     If Not FileExists(path) Then Err.Raise vbObjectError + 921, "ExportReceiptPDF", UI(56)
-    If CreateObject("Scripting.FileSystemObject").GetFile(path).Size = 0 Then Err.Raise vbObjectError + 921, "ExportReceiptPDF", UI(56)
+    If CreateObject("Scripting.FileSystemObject").GetFile(path).size = 0 Then Err.Raise vbObjectError + 921, "ExportReceiptPDF", UI(56)
 End Sub
 
 Private Sub RestoreCells(ByVal target As Excel.Range, ByVal saved As Variant)
@@ -1297,25 +1297,8 @@ Private Sub RestoreCells(ByVal target As Excel.Range, ByVal saved As Variant)
     Next cell
 End Sub
 
-Private Sub KeepReceipt(ByVal receipt As Excel.Worksheet, ByVal number As Long, ByRef saved As Excel.Worksheet)
-    receipt.Copy After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count)
-    Set saved = ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.Count)
-    saved.Name = "RET_" & Format$(number, "000000")
-    saved.Protect DrawingObjects:=True, Contents:=True, Scenarios:=True
-End Sub
-
-Private Sub RemoveUncommittedReceipt(ByVal saved As Excel.Worksheet)
-    Dim previousAlerts As Boolean
-    previousAlerts = Application.DisplayAlerts
-    On Error Resume Next
-    Application.DisplayAlerts = False
-    If Not saved Is Nothing Then saved.Delete
-    Application.DisplayAlerts = previousAlerts
-    On Error GoTo 0
-End Sub
-
 Public Sub ArchiveAndPrint()
-    Dim form As Excel.Worksheet, log As Excel.Worksheet, receipt As Excel.Worksheet, temporary As Excel.Workbook, saved As Excel.Worksheet
+    Dim form As Excel.Worksheet, log As Excel.Worksheet, receipt As Excel.Worksheet, temporary As Excel.Workbook
     Dim firstRow As Long, totalRow As Long, number As Long, logRow As Long
     Dim pdfPath As String, relativeName As String, paper As Boolean, errorText As String, paperError As String, statusError As String
     Dim oldEvents As Boolean, oldScreen As Boolean, oldCounter As Variant
@@ -1372,7 +1355,6 @@ Public Sub ArchiveAndPrint()
     PrepareReceiptCopy number, totalRow, temporary, receipt
     ExportReceiptPDF receipt, pdfPath
     pdfSaved = True
-    KeepReceipt receipt, number, saved
     logRow = LastRow(log, 15) + 1
     If logRow < 5 Then logRow = 5
     If logRow > 5 Then
@@ -1381,7 +1363,6 @@ Public Sub ArchiveAndPrint()
         Application.CutCopyMode = False
     End If
     log.Cells(logRow, 1).Value2 = number
-    log.Hyperlinks.Add Anchor:=log.Cells(logRow, 1), Address:="", SubAddress:="'" & saved.Name & "'!A1", TextToDisplay:=CStr(number)
     log.Cells(logRow, 2).value = Now
     log.Cells(logRow, 2).NumberFormat = "yyyy-mm-dd hh:mm"
     log.Cells(logRow, 3).NumberFormat = "@"
@@ -1428,7 +1409,7 @@ Public Sub ArchiveAndPrint()
         If Len(paperError) = 0 Then log.Cells(logRow, 9).Value2 = UI(45) Else log.Cells(logRow, 9).Value2 = UI(46)
         On Error Resume Next
         ThisWorkbook.Save
-        If Err.Number <> 0 Then
+        If Err.number <> 0 Then
             statusError = Err.Description
             Err.Clear
         End If
@@ -1451,7 +1432,6 @@ Failed:
     errorText = Err.Description
     On Error Resume Next
     If Not committed And backupReady Then
-        RemoveUncommittedReceipt saved
         If resetStarted Then
             RestoreCells form.Range(form.Cells(firstRow, 2), form.Cells(totalRow - 1, 10)), itemBackup
             RestoreCells form.Range(form.Cells(firstRow, 12), form.Cells(totalRow - 1, 13)), noteBackup
