@@ -885,7 +885,8 @@ End Function
 
 Private Sub ShowList(ByVal dest As Excel.Range)
     Dim dialog As SearchWindow, sourceRow As Long, customer As Boolean
-    Dim oldBusy As Boolean, oldEvents As Boolean, errorText As String
+    Dim oldBusy As Boolean, oldEvents As Boolean, oldScreen As Boolean, errorText As String
+    oldScreen = Application.ScreenUpdating
     oldBusy = BusySearching
     oldEvents = Application.EnableEvents
     On Error GoTo Failed
@@ -894,6 +895,7 @@ Private Sub ShowList(ByVal dest As Excel.Range)
     customer = IsClientCell(dest)
     Set dialog = New SearchWindow
     dialog.Configure customer, CellText(dest)
+    Application.ScreenUpdating = True
     dialog.Show vbModal
     sourceRow = dialog.ChosenRow
     Unload dialog
@@ -905,6 +907,7 @@ Done:
     Set dialog = Nothing
     Application.EnableEvents = oldEvents
     BusySearching = oldBusy
+    Application.ScreenUpdating = oldScreen
     If sourceRow > 0 And Not EntryChangeActive Then FlushEntry
     Exit Sub
 Failed:
@@ -1132,16 +1135,24 @@ Failed:
 End Sub
 
 Public Sub HandleDoubleClick(ByVal Sh As Object, ByVal target As Excel.Range, ByRef Cancel As Boolean)
-    If Sh.name = WS(MAIN).name Then
+    Dim clicked As Excel.Range
+    If Cancel Or BusyPrinting Or BusySearching Then Exit Sub
+    On Error GoTo Failed
+    Set clicked = target.Cells(1, 1).MergeArea.Cells(1, 1)
+    If Sh.CodeName = WS(MAIN).CodeName Then
         If Not Intersect(target, Sh.Range("L6").MergeArea) Is Nothing Then
             Cancel = True
             ArchiveAndPrint
-        ElseIf Not Intersect(target, Sh.Range("A8:D8")) Is Nothing Then
+        ElseIf Not Intersect(clicked, Sh.Range("A8:D8")) Is Nothing Then
             Cancel = True
-            SearchClients
-        ElseIf Not Intersect(target, ItemCells(2, 3)) Is Nothing Then
+            PendingEntryAddress = ""
+            MouseCommit = False
+            StartSearch Sh.Range("B8")
+        ElseIf Not Intersect(clicked.MergeArea, ItemCells(2, 3)) Is Nothing Then
             Cancel = True
-            StartSearch WS(MAIN).Cells(target.row, 3)
+            PendingEntryAddress = ""
+            MouseCommit = False
+            StartSearch Sh.Cells(clicked.Row, 3)
         End If
     ElseIf IsSavedReceiptSheet(Sh.name) Then
         If Not Intersect(target, Sh.Range("J11:K11")) Is Nothing Then
@@ -1154,6 +1165,9 @@ Public Sub HandleDoubleClick(ByVal Sh As Object, ByVal target As Excel.Range, By
             ReprintArchive
         End If
     End If
+    Exit Sub
+Failed:
+    UnicodeMessage UI(6) & vbCrLf & Err.Description, vbExclamation
 End Sub
 
 Public Sub ProtectFormulaCells()
