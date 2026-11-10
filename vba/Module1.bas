@@ -7,12 +7,15 @@ Private Const PRODUCTS As Long = 3
 Private Const SETTINGS As Long = 5
 Private Const DRIVERS As Long = 4
 Public BusySearching As Boolean
+Private EntryChangeActive As Boolean, MouseCommit As Boolean
 
 #If VBA7 Then
+Private Declare PtrSafe Function GetAsyncKeyState Lib "user32" (ByVal key As Long) As Integer
 Private Declare PtrSafe Function MessageBoxW Lib "user32" (ByVal hwnd As LongPtr, ByVal text As LongPtr, ByVal caption As LongPtr, ByVal flags As Long) As Long
 Private Declare PtrSafe Function GetFileAttributesW Lib "kernel32" (ByVal path As LongPtr) As Long
 Private Declare PtrSafe Function ShellExecuteW Lib "shell32" (ByVal hwnd As LongPtr, ByVal operation As LongPtr, ByVal file As LongPtr, ByVal parameters As LongPtr, ByVal directory As LongPtr, ByVal show As Long) As LongPtr
 #Else
+Private Declare Function GetAsyncKeyState Lib "user32" (ByVal key As Long) As Integer
 Private Declare Function MessageBoxW Lib "user32" (ByVal hwnd As Long, ByVal text As Long, ByVal caption As Long, ByVal flags As Long) As Long
 Private Declare Function GetFileAttributesW Lib "kernel32" (ByVal path As Long) As Long
 Private Declare Function ShellExecuteW Lib "shell32" (ByVal hwnd As Long, ByVal operation As Long, ByVal file As Long, ByVal parameters As Long, ByVal directory As Long, ByVal show As Long) As Long
@@ -347,6 +350,10 @@ Private Function ReceiptWarehouses(ByVal firstRow As Long, ByVal totalRow As Lon
 End Function
 
 Public Sub ReleaseNotesReturn()
+    If NotesReturnBound Then
+        Application.OnKey "~"
+        Application.OnKey "{ENTER}"
+    End If
     NotesReturnBound = False
 End Sub
 
@@ -354,18 +361,57 @@ Private Sub UpdateNotesReturn()
 End Sub
 
 Public Sub EnterFromNotes()
-    ' No global Enter hook is installed.
+    Dim current As Excel.Range, destination As Excel.Range
+    On Error GoTo Failed
+    If Not ActiveWorkbook Is ThisWorkbook Then RestoreEntryMode: Exit Sub
+    If ActiveSheet.Name <> WS(MAIN).Name Then RestoreEntryMode: Exit Sub
+    If BusyPrinting Or BusySearching Then Exit Sub
+    MouseCommit = False
+    Set current = ActiveCell.MergeArea.Cells(1, 1)
+    If current.Address = WS(MAIN).Range("L6").Address Then
+        ArchiveAndPrint
+        Exit Sub
+    End If
+    If Not Intersect(current, SearchInputCells()) Is Nothing And Len(CellText(current)) = 0 Then
+        StartSearch current
+        FlushEntry
+        Exit Sub
+    End If
+    Set destination = NextEntryCell(current)
+    If Not destination Is Nothing Then QueueEntry destination
+    FlushEntry
+    Exit Sub
+Failed:
+    UnicodeMessage UI(6) & vbCrLf & Err.Description, vbExclamation
 End Sub
 
 Private Sub BeginEntryMode()
+    Dim macroName As String
+    If Not EntryModeActive Then
+        PreviousReturnEnabled = Application.MoveAfterReturn
+        PreviousReturnDirection = Application.MoveAfterReturnDirection
+        EntryModeActive = True
+    End If
+    Application.MoveAfterReturn = False
+    If Not NotesReturnBound Then
+        macroName = "'" & Replace(ThisWorkbook.Name, "'", "''") & "'!Module1.EnterFromNotes"
+        Application.OnKey "~", macroName
+        Application.OnKey "{ENTER}", macroName
+        NotesReturnBound = True
+    End If
 End Sub
 
 Public Sub RestoreEntryMode()
-    CancelNativeDropdown
+    ReleaseNotesReturn
     RestoreSearchStatus
+    If EntryModeActive Then
+        Application.MoveAfterReturn = PreviousReturnEnabled
+        Application.MoveAfterReturnDirection = PreviousReturnDirection
+    End If
+    EntryModeActive = False
+    EntryChangeActive = False
     PendingEntryAddress = ""
-    PendingNativeDropdown = ""
-    BusySearching = False
+    MouseCommit = False
 End Sub
 
 Public Sub CancelNativeDropdown()
@@ -381,18 +427,70 @@ End Sub
 
 Public Sub ConfigureEntryMode()
     If BusyPrinting Or BusySearching Then Exit Sub
+    If Not ActiveWorkbook Is ThisWorkbook Then
+        RestoreEntryMode
+        Exit Sub
+    End If
+    If ActiveSheet.Name = WS(MAIN).Name Then BeginEntryMode Else RestoreEntryMode
     ProtectFormulaCells
 End Sub
 
 Private Sub QueueEntry(ByVal destination As Excel.Range)
-    ' Native Excel selection stays where the user clicks.
+    If MouseCommit Then Exit Sub
+    PendingEntryAddress = destination.MergeArea.Cells(1, 1).Address
 End Sub
+
+Private Sub FlushEntry()
+    Dim oldEvents As Boolean, address As String
+    If Len(PendingEntryAddress) = 0 Then Exit Sub
+    address = PendingEntryAddress
+    PendingEntryAddress = ""
+    If MouseCommit Or GetAsyncKeyState(1) < 0 Then Exit Sub
+    If Not ActiveWorkbook Is ThisWorkbook Then Exit Sub
+    If ActiveSheet.Name <> WS(MAIN).Name Then Exit Sub
+    oldEvents = Application.EnableEvents
+    On Error GoTo Done
+    Application.EnableEvents = False
+    WS(MAIN).Range(address).Select
+Done:
+    Application.EnableEvents = oldEvents
+End Sub
+
+Private Function NextEntryCell(ByVal current As Excel.Range) As Excel.Range
+    Dim firstRow As Long, totalRow As Long, row As Long, col As Long
+    FormRows firstRow, totalRow
+    row = current.Row: col = current.Column
+    If row = 6 Then
+        Select Case col
+        Case 2: Set NextEntryCell = WS(MAIN).Range("D6")
+        Case 4: Set NextEntryCell = WS(MAIN).Range("F6")
+        Case 6: Set NextEntryCell = WS(MAIN).Range("A8")
+        End Select
+    ElseIf row = 8 And (col = 1 Or col = 2) Then
+        Set NextEntryCell = WS(MAIN).Cells(firstRow, 3)
+    ElseIf row >= firstRow And row < totalRow Then
+        Select Case col
+        Case 2, 3: Set NextEntryCell = WS(MAIN).Cells(row, 7)
+        Case 7, 8, 9: Set NextEntryCell = WS(MAIN).Cells(row, col + 1)
+        Case 10, 11: Set NextEntryCell = WS(MAIN).Cells(row, 12)
+        Case 12: Set NextEntryCell = WS(MAIN).Cells(row, 13)
+        Case 13
+            If row < totalRow - 1 Then
+                Set NextEntryCell = WS(MAIN).Cells(row + 1, 3)
+            Else
+                Set NextEntryCell = WS(MAIN).Range("L6")
+            End If
+        End Select
+    End If
+End Function
 
 Private Sub TrackEntry()
 End Sub
 
 Public Sub HandleSelection(ByVal Sh As Object, ByVal target As Excel.Range)
-    ' Do not redirect clicks or open a delayed keyboard-driven dropdown.
+    If Sh.Name <> WS(MAIN).Name Then Exit Sub
+    If BusyPrinting Or BusySearching Then Exit Sub
+    If GetAsyncKeyState(1) < 0 Then PendingEntryAddress = ""
 End Sub
 
 
@@ -832,6 +930,12 @@ Private Sub ApplyChoice(ByVal dest As Excel.Range, ByVal sourceRow As Long)
     BuildList customer, ""
     WS(MAIN).Calculate
 
+    If customer Then
+        QueueEntry WS(MAIN).Cells(FirstItemRow(), 3)
+    Else
+        QueueEntry WS(MAIN).Cells(dest.Row, 7)
+    End If
+    If Not EntryChangeActive Then FlushEntry
 End Sub
 
 Private Sub SearchChanged(ByVal dest As Excel.Range)
@@ -879,6 +983,7 @@ Private Sub SearchChanged(ByVal dest As Excel.Range)
 End Sub
 
 Private Sub StartSearch(ByVal dest As Excel.Range)
+    MouseCommit = False
     ShowList dest
 End Sub
 
@@ -900,6 +1005,9 @@ Public Sub HandleChange(ByVal Sh As Object, ByVal target As Excel.Range)
     Dim changed As Excel.Range, cell As Excel.Range, found As Long, customer As Boolean, src As Excel.Worksheet
     Dim query As String, splitAt As Long
     If BusyPrinting Then Exit Sub
+    PendingEntryAddress = ""
+    MouseCommit = (GetAsyncKeyState(1) < 0)
+    EntryChangeActive = True
     CancelNativeDropdown
     oldEvents = Application.EnableEvents
     On Error GoTo Failed
@@ -936,9 +1044,6 @@ Public Sub HandleChange(ByVal Sh As Object, ByVal target As Excel.Range)
         If Not changed Is Nothing Then
             If target.CountLarge = 1 Or target.address = dest.MergeArea.address Then
                 SearchChanged dest
-                If ActiveWorkbook Is ThisWorkbook Then
-                    If ActiveSheet.name = WS(MAIN).name Then QueueEntry ActiveCell
-                End If
             Else
                 For Each cell In changed.Cells
                     If cell.address = cell.MergeArea.Cells(1, 1).address Then
@@ -1003,6 +1108,9 @@ Public Sub HandleChange(ByVal Sh As Object, ByVal target As Excel.Range)
         WS(MAIN).Calculate
     End If
 Done:
+    EntryChangeActive = False
+    FlushEntry
+    MouseCommit = False
     ProtectFormulaCells
     Application.EnableEvents = oldEvents
     ConfigureEntryMode
