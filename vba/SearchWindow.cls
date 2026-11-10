@@ -8,6 +8,8 @@ Attribute VB_TemplateDerived = False
 Attribute VB_Customizable = False
 Option Explicit
 Private Const PAGE_ROWS As Long = 11
+Private Const ROW_HEIGHT As Single = 26
+Private VisibleRows As Long
 Private WithEvents ResultScroll As MSForms.ScrollBar
 Private WithEvents AcceptButton As MSForms.CommandButton
 Private WithEvents CancelButton As MSForms.CommandButton
@@ -55,73 +57,91 @@ End Function
 
 Private Sub UserForm_Initialize()
     Dim item As Object, label As MSForms.Label, code As MSForms.Label, i As Long
-    Me.Width = 700: Me.Height = 520: Me.StartUpPosition = 1
+    Dim windowWidth As Single, windowHeight As Single, contentWidth As Single
+    Dim nameLeft As Single, nameWidth As Single, codeWidth As Single, footerTop As Single, gridTop As Single
+    windowWidth = 760: windowHeight = 560
+    If Application.Width - 48 < windowWidth Then windowWidth = Application.Width - 48
+    If Application.Height - 48 < windowHeight Then windowHeight = Application.Height - 48
+    If windowWidth < 520 Then windowWidth = 520
+    If windowHeight < 320 Then windowHeight = 320
+    Me.Width = windowWidth: Me.Height = windowHeight: Me.StartUpPosition = 1
     Me.Font.Name = "Tahoma": Me.Font.Size = 11
-    Me.BackColor = RGB(246, 248, 252)
+    Me.BackColor = RGB(248, 250, 253)
+    contentWidth = Me.InsideWidth - 40
+    codeWidth = 140
+    If contentWidth < 560 Then codeWidth = 120
+    nameLeft = 40 + codeWidth
+    nameWidth = Me.InsideWidth - 20 - nameLeft
+    gridTop = 152
+    VisibleRows = Int((Me.InsideHeight - gridTop - 94) / ROW_HEIGHT)
+    If VisibleRows < 1 Then VisibleRows = 1
+    If VisibleRows > PAGE_ROWS Then VisibleRows = PAGE_ROWS
+    footerTop = Me.InsideHeight - 54
     For Each item In Me.Controls
         item.Visible = False
     Next item
-    Set label = LabelAt("Heading", "", 20, 12, 652, 28, Me.BackColor, RGB(23, 54, 93), True, 16)
-    Set label = LabelAt("Subtitle", Module1.LookupCaption(10), 20, 45, 652, 20, Me.BackColor, RGB(100, 116, 139), False, 10)
+    Set label = LabelAt("Heading", "", 20, 12, contentWidth, 28, Me.BackColor, RGB(23, 54, 93), True, 15)
+    Set label = LabelAt("Subtitle", Module1.LookupCaption(10), 20, 45, contentWidth, 20, Me.BackColor, RGB(100, 116, 139), False, 10)
     With Me.TextBox1
-        .Visible = True: .Left = 20: .Top = 75: .Width = 652: .Height = 32
+        .Visible = True: .Left = 20: .Top = 78: .Width = contentWidth: .Height = 34
         .Font.Name = "Tahoma": .Font.Size = 12: .TextAlign = 3
         .BackColor = RGB(255, 255, 255): .ForeColor = RGB(23, 54, 93)
-        .BorderStyle = 1: .BorderColor = RGB(202, 213, 226): .SpecialEffect = 0
+        .BorderStyle = 1: .BorderColor = RGB(199, 211, 226): .SpecialEffect = 0
         .Value = "": .TabIndex = 0
     End With
-    Set label = LabelAt("NameHeading", Module1.LookupCaption(11), 193, 120, 479, 22, RGB(230, 236, 244), RGB(23, 54, 93), True, 10)
-    Set label = LabelAt("CodeHeading", Module1.LookupCaption(12), 38, 120, 155, 22, RGB(230, 236, 244), RGB(23, 54, 93), True, 10)
+    Set label = LabelAt("NameHeading", Module1.LookupCaption(11), nameLeft, 122, nameWidth, 24, RGB(231, 237, 245), RGB(23, 54, 93), True, 10)
+    Set label = LabelAt("CodeHeading", Module1.LookupCaption(12), 40, 122, codeWidth, 24, RGB(231, 237, 245), RGB(23, 54, 93), True, 10)
     label.TextAlign = 2
     Set ResultScroll = Me.Controls.Add("Forms.ScrollBar.1", "ResultScroll", True)
     With ResultScroll
-        .Left = 20: .Top = 146: .Width = 14: .Height = PAGE_ROWS * 24
-        .Orientation = 0: .Min = 0: .Max = 0: .SmallChange = 1: .LargeChange = PAGE_ROWS
+        .Left = 20: .Top = gridTop: .Width = 14: .Height = VisibleRows * ROW_HEIGHT
+        .Orientation = 0: .Min = 0: .Max = 0: .SmallChange = 1: .LargeChange = VisibleRows
         .TabStop = False
     End With
     For i = 1 To PAGE_ROWS
-        Set label = LabelAt("RowName" & CStr(i), "", 193, 146 + (i - 1) * 24, 479, 24, vbWhite, RGB(38, 55, 74))
-        Set code = LabelAt("RowCode" & CStr(i), "", 38, 146 + (i - 1) * 24, 155, 24, vbWhite, RGB(38, 55, 74), False, 10)
+        Set label = LabelAt("RowName" & CStr(i), "", nameLeft, gridTop + (i - 1) * ROW_HEIGHT, nameWidth, ROW_HEIGHT, vbWhite, RGB(38, 55, 74))
+        Set code = LabelAt("RowCode" & CStr(i), "", 40, gridTop + (i - 1) * ROW_HEIGHT, codeWidth, ROW_HEIGHT, vbWhite, RGB(38, 55, 74), False, 10)
+        label.Visible = (i <= VisibleRows): code.Visible = (i <= VisibleRows)
         code.TextAlign = 2
-        Set NameRows(i) = label
-        Set CodeRows(i) = code
+        Set NameRows(i) = label: Set CodeRows(i) = code
         BindRow i, label, code
     Next i
     With Me.Label1
-        .Visible = True: .Left = 20: .Top = 421: .Width = 652: .Height = 20
+        .Visible = True: .Left = 20: .Top = gridTop + VisibleRows * ROW_HEIGHT + 8
+        .Width = contentWidth: .Height = 16
+        .Font.Name = "Tahoma": .Font.Size = 10
         .TextAlign = 3: .BackStyle = 0: .ForeColor = RGB(69, 91, 115)
     End With
+    Set label = LabelAt("FooterDivider", "", 20, footerTop - 10, contentWidth, 1, RGB(224, 231, 240), RGB(224, 231, 240))
     With Me.Label2
-        .Visible = True: .Left = 20: .Top = 461: .Width = 350: .Height = 27
-        .TextAlign = 3: .BackStyle = 0: .Font.Size = 9
+        .Visible = True: .Left = 20: .Top = footerTop + 1
+        .Width = contentWidth - 240: .Height = 34
+        .TextAlign = 3: .BackStyle = 0: .WordWrap = True
+        .Font.Name = "Tahoma": .Font.Size = 9
         .ForeColor = RGB(100, 116, 139): .Caption = Module1.LookupCaption(4)
     End With
     Set AcceptButton = Me.Controls.Add("Forms.CommandButton.1", "LookupAccept", True)
     With AcceptButton
-        .Left = 552: .Top = 455: .Width = 120: .Height = 32
+        .Left = Me.InsideWidth - 140: .Top = footerTop: .Width = 120: .Height = 34
+        .Font.Name = "Tahoma": .Font.Size = 11
         .Caption = Module1.LookupCaption(5): .Default = True: .TabIndex = 1
         .BackColor = RGB(23, 54, 93): .ForeColor = vbWhite: .Font.Bold = True
     End With
     Set CancelButton = Me.Controls.Add("Forms.CommandButton.1", "LookupCancel", True)
     With CancelButton
-        .Left = 442: .Top = 455: .Width = 98: .Height = 32
+        .Left = Me.InsideWidth - 248: .Top = footerTop: .Width = 96: .Height = 34
+        .Font.Name = "Tahoma": .Font.Size = 11
         .Caption = Module1.LookupCaption(6): .Cancel = True: .TabIndex = 2
-        .BackColor = RGB(230, 236, 244): .ForeColor = RGB(23, 54, 93)
+        .BackColor = RGB(231, 237, 245): .ForeColor = RGB(23, 54, 93)
     End With
 End Sub
 
 Public Sub Configure(ByVal isCustomer As Boolean, ByVal initialQuery As String)
-    Dim i As Long
     Ready = False: ChosenRow = 0: Customer = isCustomer
     If Customer Then Me.Caption = Module1.LookupCaption(8) Else Me.Caption = Module1.LookupCaption(9)
     Me.Controls("Heading").Caption = Me.Caption
     DataRows = Module1.LookupData(Customer)
-    If IsArray(DataRows) Then
-        ReDim Prepared(1 To UBound(DataRows, 1))
-        For i = 1 To UBound(DataRows, 1)
-            Prepared(i) = Module1.NormalizeLookup(CStr(DataRows(i, 1)) & " " & CStr(DataRows(i, 2)))
-        Next i
-    End If
+    Module1.CopyLookupKeys Customer, Prepared
     Me.TextBox1.Value = initialQuery
     Ready = True
     FilterResults
@@ -161,8 +181,8 @@ Private Sub FilterResults()
     ResultCount = count: SelectedIndex = 0
     Drawing = True
     ResultScroll.Min = 0
-    If count > PAGE_ROWS Then ResultScroll.Max = count - PAGE_ROWS Else ResultScroll.Max = 0
-    ResultScroll.Value = 0: ResultScroll.Enabled = (count > PAGE_ROWS)
+    If count > VisibleRows Then ResultScroll.Max = count - VisibleRows Else ResultScroll.Max = 0
+    ResultScroll.Value = 0: ResultScroll.Enabled = (count > VisibleRows)
     Drawing = False
     If count > 0 Then SelectedIndex = 1
     AcceptButton.Enabled = (count > 0)
@@ -175,7 +195,7 @@ Private Sub RenderResults()
     Dim slot As Long, index As Long, source As Long
     For slot = 1 To PAGE_ROWS
         index = ResultScroll.Value + slot
-        If index <= ResultCount Then
+        If slot <= VisibleRows And index <= ResultCount Then
             source = FilteredRows(index)
             DisplayRow slot, index, CStr(DataRows(source, 2)), CStr(DataRows(source, 1)), (index = SelectedIndex)
         Else
@@ -189,7 +209,7 @@ Public Sub SelectResult(ByVal index As Long, ByVal confirm As Boolean)
     SelectedIndex = index
     Drawing = True
     If index <= ResultScroll.Value Then ResultScroll.Value = index - 1
-    If index > ResultScroll.Value + PAGE_ROWS Then ResultScroll.Value = index - PAGE_ROWS
+    If index > ResultScroll.Value + VisibleRows Then ResultScroll.Value = index - VisibleRows
     Drawing = False
     RenderResults
     If confirm Then ConfirmChoice Else Me.TextBox1.SetFocus
@@ -197,7 +217,7 @@ End Sub
 Private Sub ResultScroll_Change()
     If Not Ready Or Drawing Then Exit Sub
     If ResultCount > 0 Then
-        If SelectedIndex <= ResultScroll.Value Or SelectedIndex > ResultScroll.Value + PAGE_ROWS Then
+        If SelectedIndex <= ResultScroll.Value Or SelectedIndex > ResultScroll.Value + VisibleRows Then
             SelectedIndex = ResultScroll.Value + 1
         End If
     End If
@@ -225,10 +245,10 @@ Private Sub TextBox1_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift
         If SelectedIndex > 1 Then SelectResult SelectedIndex - 1, False
         KeyCode = 0
     ElseIf KeyCode = vbKeyPageDown Then
-        If ResultCount > 0 Then SelectResult WorksheetFunction.Min(ResultCount, SelectedIndex + PAGE_ROWS), False
+        If ResultCount > 0 Then SelectResult WorksheetFunction.Min(ResultCount, SelectedIndex + VisibleRows), False
         KeyCode = 0
     ElseIf KeyCode = vbKeyPageUp Then
-        If ResultCount > 0 Then SelectResult WorksheetFunction.Max(1, SelectedIndex - PAGE_ROWS), False
+        If ResultCount > 0 Then SelectResult WorksheetFunction.Max(1, SelectedIndex - VisibleRows), False
         KeyCode = 0
     ElseIf KeyCode = vbKeyReturn Then
         KeyCode = 0: ConfirmChoice

@@ -1081,19 +1081,11 @@ Failed:
 End Sub
 
 Public Sub ProtectFormulaCells()
-    Dim sheet As Excel.Worksheet, formulas As Excel.Range, cell As Excel.Range
+    Dim sheet As Excel.Worksheet, receipt As Excel.Worksheet
+    Set receipt = WS(MAIN)
     For Each sheet In ThisWorkbook.Worksheets
-        If Not IsSavedReceiptSheet(sheet.name) Then
-            sheet.Unprotect
-            Set formulas = Nothing
-            On Error Resume Next
-            Set formulas = sheet.UsedRange.SpecialCells(xlCellTypeFormulas)
-            On Error GoTo 0
-            If Not formulas Is Nothing Then
-                sheet.UsedRange.Locked = False
-                For Each cell In formulas.Cells
-                    cell.MergeArea.Locked = True
-                Next cell
+        If Not IsSavedReceiptSheet(sheet.Name) Then
+            If sheet.CodeName = receipt.CodeName Or sheet.ProtectContents Then
                 sheet.Protect DrawingObjects:=True, Contents:=True, Scenarios:=True, UserInterfaceOnly:=True, AllowFiltering:=True
                 sheet.EnableSelection = xlNoRestrictions
             End If
@@ -1116,44 +1108,33 @@ Private Sub BindSearchButtons()
 End Sub
 
 Public Sub Initialize()
-    Dim oldEvents As Boolean, r As Long, firstRow As Long, totalRow As Long, errorText As String
+    Dim oldEvents As Boolean, oldScreen As Boolean, errorText As String
+    Dim receipt As Excel.Worksheet
     oldEvents = Application.EnableEvents
+    oldScreen = Application.ScreenUpdating
     On Error GoTo Failed
     Application.EnableEvents = False
-    WS(MAIN).Unprotect
+    Application.ScreenUpdating = False
+    Set receipt = WS(MAIN)
+    receipt.Select Replace:=True
+    receipt.Range("B6").Select
+    ActiveWindow.ScrollRow = 1
+    ActiveWindow.ScrollColumn = 1
+    receipt.Unprotect
     BindSearchButtons
     InvalidateSearchCaches
     RestoreSearchStatus
-    BeginEntryMode
-    ThisWorkbook.Names.Add name:="ReturnReasons", RefersTo:="='" & Replace(WS(SETTINGS).name, "'", "''") & "'!$C$2:$C$7"
-    If Not RulesValid() Then Err.Raise vbObjectError + 941, "Initialize", UI(66)
-    RefreshDriver
-    FormRows firstRow, totalRow
-    RefreshTotals firstRow, totalRow
-    FitReceiptPage WS(MAIN)
-    WS(SETTINGS).Range("E2").value = NextNumber()
-    WS(MAIN).Range("L8").formula = "=""#""&'" & Replace(WS(SETTINGS).name, "'", "''") & "'!$E$2"
-    FillNames
-    BuildList True, ""
-    BuildList False, ""
-    SetList WS(MAIN).Range("A8"), "InlineClients"
-    SetList WS(MAIN).Range("B8"), "InlineClients"
-    For r = FirstItemRow() To LastItemRow()
-        SetList WS(MAIN).Cells(r, 2), "InlineProducts"
-        SetList WS(MAIN).Cells(r, 3), "InlineProducts"
-    Next r
-    WS(MAIN).Calculate
-Done:
-    WS(MAIN).Activate
-    WS(MAIN).Range("B6").Select
     ProtectFormulaCells
+    BeginEntryMode
     Application.EnableEvents = oldEvents
+    Application.ScreenUpdating = oldScreen
     Exit Sub
 Failed:
     errorText = Err.Description
     On Error Resume Next
     RestoreEntryMode
     Application.EnableEvents = oldEvents
+    Application.ScreenUpdating = oldScreen
     On Error GoTo 0
     UnicodeMessage UI(6) & vbCrLf & errorText, vbExclamation
 End Sub
@@ -1610,3 +1591,12 @@ End Function
 Public Function IsMainSheet(ByVal sheet As Object) As Boolean
     If TypeOf sheet Is Excel.Worksheet Then IsMainSheet = (sheet.CodeName = WS(MAIN).CodeName)
 End Function
+
+Public Sub CopyLookupKeys(ByVal Customer As Boolean, ByRef keys() As String)
+    EnsureSearchCache Customer
+    If Customer Then
+        keys = ClientCacheKeys
+    Else
+        keys = ProductCacheKeys
+    End If
+End Sub
