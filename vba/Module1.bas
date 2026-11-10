@@ -7,6 +7,7 @@ Private Const PRODUCTS As Long = 3
 Private Const SETTINGS As Long = 5
 Private Const DRIVERS As Long = 4
 Public BusySearching As Boolean
+Private MenuChoice As Long, MenuPage As Long
 
 #If VBA7 Then
 Private Declare PtrSafe Function MessageBoxW Lib "user32" (ByVal hwnd As LongPtr, ByVal text As LongPtr, ByVal caption As LongPtr, ByVal flags As Long) As Long
@@ -347,214 +348,52 @@ Private Function ReceiptWarehouses(ByVal firstRow As Long, ByVal totalRow As Lon
 End Function
 
 Public Sub ReleaseNotesReturn()
-    If Not NotesReturnBound Then Exit Sub
-    Application.OnKey "~"
-    Application.OnKey "{ENTER}"
     NotesReturnBound = False
 End Sub
 
 Private Sub UpdateNotesReturn()
-    Dim firstRow As Long, totalRow As Long, current As Excel.Range, macroName As String
-    On Error GoTo Release
-    If Not ActiveWorkbook Is ThisWorkbook Then GoTo Release
-    If ActiveSheet.name <> WS(MAIN).name Then GoTo Release
-    Set current = ActiveCell.MergeArea.Cells(1, 1)
-    FormRows firstRow, totalRow
-    If current.Column <> 13 Or current.row < firstRow Or current.row >= totalRow Then GoTo Release
-    If Not NotesReturnBound Then
-        macroName = "'" & Replace(ThisWorkbook.name, "'", "''") & "'!Module1.EnterFromNotes"
-        NotesReturnBound = True
-        Application.OnKey "~", macroName
-        Application.OnKey "{ENTER}", macroName
-    End If
-    Exit Sub
-Release:
-    ReleaseNotesReturn
 End Sub
 
 Public Sub EnterFromNotes()
-    Dim firstRow As Long, totalRow As Long, row As Long, oldEvents As Boolean
-    oldEvents = Application.EnableEvents
-    On Error GoTo Failed
-    If Not ActiveWorkbook Is ThisWorkbook Then GoTo Done
-    If ActiveSheet.name <> WS(MAIN).name Then GoTo Done
-    If ActiveCell.MergeArea.Cells(1, 1).Column <> 13 Then GoTo Done
-    row = ActiveCell.row
-    FormRows firstRow, totalRow
-    If row < firstRow Or row >= totalRow Then GoTo Done
-    Application.EnableEvents = False
-    PendingEntryAddress = "": PendingNativeDropdown = ""
-    ReleaseNotesReturn
-    If row < totalRow - 1 Then
-        WS(MAIN).Cells(row + 1, 3).Select
-    Else
-        WS(MAIN).Range("L6").Select
-    End If
-Done:
-    Application.EnableEvents = oldEvents
-    TrackEntry
-    ConfigureEntryMode
-    Exit Sub
-Failed:
-    Application.EnableEvents = oldEvents
-    ReleaseNotesReturn
-    UnicodeMessage UI(6) & vbCrLf & Err.Description, vbExclamation
+    ' No global Enter hook is installed.
 End Sub
 
 Private Sub BeginEntryMode()
-    Dim rtl As Boolean
-    If Not EntryModeActive Then
-        PreviousReturnEnabled = Application.MoveAfterReturn
-        PreviousReturnDirection = Application.MoveAfterReturnDirection
-        EntryModeActive = True
-    End If
-    Application.MoveAfterReturn = True
-    rtl = True
-    On Error Resume Next
-    rtl = WS(MAIN).DisplayRightToLeft
-    On Error GoTo 0
-    If rtl Then
-        Application.MoveAfterReturnDirection = xlToLeft
-    Else
-        Application.MoveAfterReturnDirection = xlToRight
-    End If
 End Sub
 
 Public Sub RestoreEntryMode()
     CancelNativeDropdown
     RestoreSearchStatus
-    ReleaseNotesReturn
-    PendingNativeDropdown = ""
-    If Not EntryModeActive Then Exit Sub
-    Application.MoveAfterReturnDirection = PreviousReturnDirection
-    Application.MoveAfterReturn = PreviousReturnEnabled
-    EntryModeActive = False
     PendingEntryAddress = ""
     PendingNativeDropdown = ""
-    LastEntryRow = 0: LastEntryColumn = 0
+    BusySearching = False
 End Sub
 
 Public Sub CancelNativeDropdown()
-    On Error Resume Next
-    If DropdownScheduled Then Application.OnTime EarliestTime:=DropdownTime, Procedure:=DropdownProcedure, Schedule:=False
     DropdownScheduled = False
     DropdownAddress = ""
-    On Error GoTo 0
 End Sub
 
 Private Sub ScheduleNativeDropdown()
-    Dim anchor As Excel.Range, previousAddress As String, previousFiltered As Boolean, wasScheduled As Boolean
-    previousAddress = DropdownAddress
-    previousFiltered = DropdownFiltered
-    wasScheduled = DropdownScheduled
-    CancelNativeDropdown
-    If BusyPrinting Or BusySearching Then Exit Sub
-    If Not ActiveWorkbook Is ThisWorkbook Then Exit Sub
-    If ActiveSheet.Name <> WS(MAIN).Name Then Exit Sub
-    Set anchor = ActiveCell.MergeArea.Cells(1, 1)
-    If Intersect(anchor, SearchInputCells()) Is Nothing Then Exit Sub
-    DropdownAddress = anchor.Address
-    DropdownFiltered = (PendingNativeDropdown = DropdownAddress)
-    If wasScheduled And previousAddress = DropdownAddress And previousFiltered Then DropdownFiltered = True
-    PendingNativeDropdown = ""
-    DropdownTime = Now + TimeSerial(0, 0, 1)
-    DropdownProcedure = "'" & Replace(ThisWorkbook.Name, "'", "''") & "'!Module1.OpenPendingDropdown"
-    Application.OnTime EarliestTime:=DropdownTime, Procedure:=DropdownProcedure
-    DropdownScheduled = True
 End Sub
 
 Public Sub OpenPendingDropdown()
-    Dim anchor As Excel.Range, oldEvents As Boolean, customer As Boolean, listName As String
-    DropdownScheduled = False
-    oldEvents = Application.EnableEvents
-    On Error GoTo Done
-    If BusyPrinting Or BusySearching Then Exit Sub
-    If Not ActiveWorkbook Is ThisWorkbook Then Exit Sub
-    If ActiveSheet.Name <> WS(MAIN).Name Then Exit Sub
-    If Len(DropdownAddress) = 0 Then Exit Sub
-    Set anchor = ActiveCell.MergeArea.Cells(1, 1)
-    If anchor.Address <> DropdownAddress Then Exit Sub
-    If Intersect(anchor, SearchInputCells()) Is Nothing Then Exit Sub
-    Application.EnableEvents = False
-    customer = IsClientCell(anchor)
-    If customer Then listName = "InlineClients" Else listName = "InlineProducts"
-    If Not DropdownFiltered Then BuildList customer, ""
-    SetList anchor, listName
-    Application.EnableEvents = oldEvents
-    DropdownAddress = ""
-    Application.SendKeys "%{DOWN}", False
-    Exit Sub
-Done:
-    Application.EnableEvents = oldEvents
-    DropdownAddress = ""
 End Sub
 
 Public Sub ConfigureEntryMode()
-    On Error GoTo Restore
-    If Not ActiveWorkbook Is ThisWorkbook Then GoTo Restore
-    If ActiveSheet.Name = WS(MAIN).Name Then
-        BeginEntryMode
-        TrackEntry
-        ScheduleNativeDropdown
-        Exit Sub
-    End If
-Restore:
-    RestoreEntryMode
+    If BusyPrinting Or BusySearching Then Exit Sub
+    ProtectFormulaCells
 End Sub
 
 Private Sub QueueEntry(ByVal destination As Excel.Range)
-    PendingEntryAddress = destination.address
+    ' Native Excel selection stays where the user clicks.
 End Sub
 
 Private Sub TrackEntry()
-    If ActiveWorkbook Is ThisWorkbook Then
-        If ActiveSheet.name = WS(MAIN).name Then
-            LastEntryRow = ActiveCell.MergeArea.Cells(1, 1).row
-            LastEntryColumn = ActiveCell.MergeArea.Cells(1, 1).Column
-        End If
-    End If
-    UpdateNotesReturn
 End Sub
 
 Public Sub HandleSelection(ByVal Sh As Object, ByVal target As Excel.Range)
-    Dim cell As Excel.Range, firstRow As Long, totalRow As Long, oldEvents As Boolean
-    If BusyPrinting Or BusySearching Then Exit Sub
-    If Sh.name <> WS(MAIN).name Then Exit Sub
-    oldEvents = Application.EnableEvents
-    On Error GoTo Failed
-    Application.EnableEvents = False
-    BeginEntryMode
-    Set cell = target.Cells(1, 1).MergeArea.Cells(1, 1)
-    If Len(PendingEntryAddress) > 0 Then
-        Set cell = Sh.Range(PendingEntryAddress)
-        PendingEntryAddress = ""
-        cell.Select
-        GoTo Done
-    End If
-    If target.CountLarge > 1 And target.address <> cell.MergeArea.address Then GoTo Done
-    FormRows firstRow, totalRow
-    If LastEntryRow = cell.row And cell.row >= firstRow And cell.row < totalRow Then
-        If LastEntryColumn = 10 And cell.Column = 11 Then
-            Sh.Cells(cell.row, 12).Select
-            GoTo Done
-        ElseIf LastEntryColumn = 13 And cell.Column = 14 Then
-            If cell.row < totalRow - 1 Then
-                Sh.Cells(cell.row + 1, 3).Select
-            Else
-                Sh.Range("L6").Select
-            End If
-            GoTo Done
-        End If
-    End If
-Done:
-    TrackEntry
-    BusySearching = False
-    Application.EnableEvents = oldEvents
-    ConfigureEntryMode
-    Exit Sub
-Failed:
-    UnicodeMessage UI(6) & vbCrLf & Err.Description, vbExclamation
-    Resume Done
+    ' Do not redirect clicks or open a delayed keyboard-driven dropdown.
 End Sub
 
 
@@ -562,7 +401,7 @@ Private Function LastRow(ByVal Sh As Excel.Worksheet, ByVal cols As Long) As Lon
     Dim c As Long, r As Long
     LastRow = 1
     For c = 1 To cols
-        r = Sh.Cells(Sh.Rows.count, c).End(xlUp).row
+        r = Sh.Cells(Sh.rows.count, c).End(xlUp).row
         If r > LastRow Then LastRow = r
     Next c
 End Function
@@ -634,7 +473,9 @@ End Sub
 Private Function FilterSearchData(ByVal customer As Boolean, ByVal query As String, ByRef data As Variant, ByRef prepared() As String) As Long
     Dim i As Long, j As Long, count As Long, oldLast As Long, column As Long, rows As Long
     Dim matches() As Long, result() As Variant, tokens As Variant, token As Variant, accepted As Boolean
-    Dim listName As String, reference As String, existing As Excel.Name
+    Dim listName As String, reference As String, existing As Excel.name, suffix As Boolean
+    query = Normal(query)
+    suffix = customer And (Len(query) = 4 Or Len(query) = 5) And Not (query Like "*[!0-9]*")
     If customer Then column = 27: listName = "InlineClients" Else column = 28: listName = "InlineProducts"
     tokens = Split(Normal(query), " ")
     If IsArray(data) Then
@@ -648,12 +489,13 @@ Private Function FilterSearchData(ByVal customer As Boolean, ByVal query As Stri
                         If InStr(1, prepared(i), CStr(token), vbBinaryCompare) = 0 Then accepted = False: Exit For
                     End If
                 Next token
+                If suffix Then accepted = (Right$(Normal(CStr(data(i, 1))), Len(query)) = query)
                 If accepted Then count = count + 1: matches(count) = i
             End If
         Next i
     End If
     With WS(MAIN)
-        oldLast = .Cells(.Rows.Count, column).End(xlUp).Row
+        oldLast = .Cells(.rows.count, column).End(xlUp).row
         If oldLast >= 2 Then .Range(.Cells(2, column), .Cells(oldLast, column)).ClearContents
         If count > 0 Then
             ReDim result(1 To count, 1 To 1)
@@ -665,14 +507,14 @@ Private Function FilterSearchData(ByVal customer As Boolean, ByVal query As Stri
         Else
             .Cells(2, column).Value2 = UI(5)
         End If
-        reference = "='" & Replace(.Name, "'", "''") & "'!" & .Cells(2, column).Resize(IIf(count > 0, count, 1), 1).Address
+        reference = "='" & Replace(.name, "'", "''") & "'!" & .Cells(2, column).Resize(IIf(count > 0, count, 1), 1).address
         .Range("AA:AB").EntireColumn.Hidden = True
     End With
     On Error Resume Next
     Set existing = ThisWorkbook.Names(listName)
     On Error GoTo 0
     If existing Is Nothing Then
-        ThisWorkbook.Names.Add Name:=listName, RefersTo:=reference
+        ThisWorkbook.Names.Add name:=listName, RefersTo:=reference
     Else
         existing.RefersTo = reference
     End If
@@ -698,10 +540,10 @@ Private Function CodeRow(ByVal src As Excel.Worksheet, ByVal code As String) As 
     Dim key As String, index As Object, r As Long, found As Long
     key = Normal(code)
     If Len(key) = 0 Then Exit Function
-    If src.Name = WS(CLIENTS).Name Then
+    If src.name = WS(CLIENTS).name Then
         EnsureSearchCache True
         Set index = ClientCodeIndex
-    ElseIf src.Name = WS(PRODUCTS).Name Then
+    ElseIf src.name = WS(PRODUCTS).name Then
         EnsureSearchCache False
         Set index = ProductCodeIndex
     End If
@@ -731,7 +573,7 @@ End Function
 Private Sub FormRows(ByRef firstRow As Long, ByRef totalRow As Long)
     Dim r As Long, lastLabelRow As Long, title As String, header As Excel.Range
     firstRow = 0: totalRow = 0
-    lastLabelRow = WS(MAIN).Cells(WS(MAIN).Rows.count, 1).End(xlUp).row
+    lastLabelRow = WS(MAIN).Cells(WS(MAIN).rows.count, 1).End(xlUp).row
     For r = 1 To lastLabelRow
         title = Normal(CellText(WS(MAIN).Cells(r, 1)))
         If title = Normal(UI(31)) Then
@@ -743,7 +585,7 @@ Private Sub FormRows(ByRef firstRow As Long, ByRef totalRow As Long)
     For r = 1 To totalRow - 1
         If Normal(CellText(WS(MAIN).Cells(r, 2))) = Normal(UI(30)) Then
             Set header = WS(MAIN).Cells(r, 2).MergeArea
-            firstRow = header.row + header.Rows.count
+            firstRow = header.row + header.rows.count
             Exit For
         End If
     Next r
@@ -901,7 +743,7 @@ Private Function ProductSearchTarget() As Excel.Range
 End Function
 
 Private Function IsClientCell(ByVal dest As Excel.Range) As Boolean
-    IsClientCell = (dest.row = 8 And (dest.Column = 1 Or dest.Column = 2))
+    IsClientCell = (dest.row = 8 And (dest.column = 1 Or dest.column = 2))
 End Function
 
 Private Function CandidateSource(ByVal customer As Boolean) As Excel.Worksheet
@@ -909,6 +751,9 @@ Private Function CandidateSource(ByVal customer As Boolean) As Excel.Worksheet
 End Function
 
 Private Sub SetList(ByVal dest As Excel.Range, ByVal listName As String)
+    Dim protected As Boolean
+    protected = dest.Worksheet.ProtectContents
+    If protected Then dest.Worksheet.Unprotect
     With dest.MergeArea.Validation
         .Delete
         .Add Type:=xlValidateList, AlertStyle:=xlValidAlertInformation, Operator:=xlBetween, Formula1:="=" & listName
@@ -919,6 +764,7 @@ Private Sub SetList(ByVal dest As Excel.Range, ByVal listName As String)
         .InputTitle = ""
         .InputMessage = ""
     End With
+    If protected Then dest.Worksheet.Protect DrawingObjects:=True, Contents:=True, Scenarios:=True, UserInterfaceOnly:=True, AllowFiltering:=True
 End Sub
 
 Private Function BuildList(ByVal customer As Boolean, ByVal query As String) As Long
@@ -930,9 +776,69 @@ Private Function BuildList(ByVal customer As Boolean, ByVal query As String) As 
     End If
 End Function
 
+Public Sub ChooseSearchResult()
+    MenuChoice = CLng(Application.CommandBars.ActionControl.Tag)
+End Sub
+
 Private Sub ShowList(ByVal dest As Excel.Range)
-    PendingNativeDropdown = dest.address
-    QueueEntry dest
+    Dim menu As Object, button As Object, i As Long, last As Long, column As Long
+    Dim previousBusy As Boolean, previousEvents As Boolean, query As String, chosen As Long, sourceRow As Long
+    Dim customer As Boolean, value As String, message As String
+    previousBusy = BusySearching
+    previousEvents = Application.EnableEvents
+    On Error GoTo Failed
+    BusySearching = True
+    Application.EnableEvents = False
+    customer = IsClientCell(dest)
+    If customer Then column = 27 Else column = 28
+    last = WS(MAIN).Cells(WS(MAIN).Rows.Count, column).End(xlUp).Row
+    MenuPage = 2
+    Do
+        Set menu = Application.CommandBars.Add(Position:=5, Temporary:=True)
+        MenuChoice = 0
+        For i = MenuPage To Application.Min(MenuPage + 29, last)
+            Set button = menu.Controls.Add(Type:=1)
+            value = CStr(WS(MAIN).Cells(i, column).Value2)
+            button.Caption = Replace(Left$(value, 250), "&", "&&")
+            button.Tag = CStr(i)
+            button.OnAction = "'" & Replace(ThisWorkbook.Name, "'", "''") & "'!Module1.ChooseSearchResult"
+        Next i
+        If MenuPage > 2 Then
+            Set button = menu.Controls.Add(Type:=1)
+            button.Caption = "< 30": button.Tag = "-1"
+            button.OnAction = "'" & Replace(ThisWorkbook.Name, "'", "''") & "'!Module1.ChooseSearchResult"
+        End If
+        If MenuPage + 29 < last Then
+            Set button = menu.Controls.Add(Type:=1)
+            button.Caption = "30 >": button.Tag = "-2"
+            button.OnAction = "'" & Replace(ThisWorkbook.Name, "'", "''") & "'!Module1.ChooseSearchResult"
+        End If
+        menu.ShowPopup
+        menu.Delete: Set menu = Nothing
+        If MenuChoice = -1 Then
+            MenuPage = Application.Max(2, MenuPage - 30)
+        ElseIf MenuChoice = -2 Then
+            MenuPage = MenuPage + 30
+        Else
+            Exit Do
+        End If
+    Loop
+    If MenuChoice >= 2 Then
+        value = CStr(WS(MAIN).Cells(MenuChoice, column).Value2)
+        query = Left$(value, InStrRev(value, " | ") - 1)
+        sourceRow = CodeRow(CandidateSource(customer), query)
+        If sourceRow > 0 Then ApplyChoice dest, sourceRow
+    End If
+Done:
+    On Error Resume Next
+    If Not menu Is Nothing Then menu.Delete
+    Application.EnableEvents = previousEvents
+    BusySearching = previousBusy
+    Exit Sub
+Failed:
+    message = Err.Description
+    UnicodeMessage UI(6) & vbCrLf & message, vbExclamation
+    Resume Done
 End Sub
 
 Private Sub FillNames()
@@ -955,14 +861,14 @@ Private Sub ApplyChoice(ByVal dest As Excel.Range, ByVal sourceRow As Long)
         WS(MAIN).Range("A8").Value2 = CStr(src.Cells(sourceRow, 1).Value2)
         WS(MAIN).Range("B8").Value2 = src.Cells(sourceRow, 2).Value2
     Else
-        WS(MAIN).Cells(dest.Row, 2).NumberFormat = "@"
-        WS(MAIN).Cells(dest.Row, 2).Value2 = CStr(src.Cells(sourceRow, 1).Value2)
-        WS(MAIN).Cells(dest.Row, 3).Value2 = src.Cells(sourceRow, 2).Value2
-        WS(MAIN).Cells(dest.Row, 7).Select
+        WS(MAIN).Cells(dest.row, 2).NumberFormat = "@"
+        WS(MAIN).Cells(dest.row, 2).Value2 = CStr(src.Cells(sourceRow, 1).Value2)
+        WS(MAIN).Cells(dest.row, 3).Value2 = src.Cells(sourceRow, 2).Value2
+
     End If
     BuildList customer, ""
     WS(MAIN).Calculate
-    If customer Then WS(MAIN).Cells(FirstItemRow(), 3).Select
+
 End Sub
 
 Private Sub SearchChanged(ByVal dest As Excel.Range)
@@ -974,9 +880,9 @@ Private Sub SearchChanged(ByVal dest As Excel.Range)
     PendingNativeDropdown = ""
     If customer Then c = 27: listName = "InlineClients" Else c = 28: listName = "InlineProducts"
     If customer Then
-        If dest.Column = 2 Then WS(MAIN).Range("A8").MergeArea.ClearContents Else WS(MAIN).Range("B8").MergeArea.ClearContents
+        If dest.column = 2 Then WS(MAIN).Range("A8").MergeArea.ClearContents Else WS(MAIN).Range("B8").MergeArea.ClearContents
     Else
-        If dest.Column = 3 Then WS(MAIN).Cells(dest.row, 2).ClearContents Else WS(MAIN).Cells(dest.row, 3).MergeArea.ClearContents
+        If dest.column = 3 Then WS(MAIN).Cells(dest.row, 2).ClearContents Else WS(MAIN).Cells(dest.row, 3).MergeArea.ClearContents
     End If
     If Len(query) = 0 Then
         RestoreSearchStatus
@@ -1021,8 +927,7 @@ Private Sub StartSearch(ByVal dest As Excel.Range)
     SetList dest, listName
     dest.Select
     Application.EnableEvents = oldEvents
-    PendingNativeDropdown = dest.Address
-    ScheduleNativeDropdown
+    ShowList dest
     Exit Sub
 Failed:
     Application.EnableEvents = oldEvents
@@ -1031,7 +936,7 @@ End Sub
 
 Public Sub SearchProducts()
     If ActiveSheet.name <> WS(MAIN).name Then Exit Sub
-    If ActiveCell.row >= FirstItemRow() And ActiveCell.row <= LastItemRow() And (ActiveCell.Column = 2 Or ActiveCell.Column = 3) Then
+    If ActiveCell.row >= FirstItemRow() And ActiveCell.row <= LastItemRow() And (ActiveCell.column = 2 Or ActiveCell.column = 3) Then
         StartSearch WS(MAIN).Cells(ActiveCell.row, 3)
     Else
         StartSearch ProductSearchTarget()
@@ -1051,6 +956,7 @@ Public Sub HandleChange(ByVal Sh As Object, ByVal target As Excel.Range)
     oldEvents = Application.EnableEvents
     On Error GoTo Failed
     Application.EnableEvents = False
+    WS(MAIN).Unprotect
     If Sh.name = WS(MAIN).name Then
         BeginEntryMode
         If Not Intersect(target, Sh.Range("B6")) Is Nothing Then
@@ -1095,9 +1001,9 @@ Public Sub HandleChange(ByVal Sh As Object, ByVal target As Excel.Range)
                         If splitAt > 0 Then query = Left$(query, splitAt - 1)
                         If Len(query) = 0 Then
                             If customer Then
-                                If cell.Column = 1 Then Sh.Range("B8").MergeArea.ClearContents Else Sh.Range("A8").ClearContents
+                                If cell.column = 1 Then Sh.Range("B8").MergeArea.ClearContents Else Sh.Range("A8").ClearContents
                             Else
-                                If cell.Column = 2 Then Sh.Cells(cell.row, 3).MergeArea.ClearContents Else Sh.Cells(cell.row, 2).ClearContents
+                                If cell.column = 2 Then Sh.Cells(cell.row, 3).MergeArea.ClearContents Else Sh.Cells(cell.row, 2).ClearContents
                             End If
                         Else
                             found = CodeRow(src, query)
@@ -1109,21 +1015,21 @@ Public Sub HandleChange(ByVal Sh As Object, ByVal target As Excel.Range)
         End If
         RefreshTotals firstRow, totalRow
         If target.CountLarge = 1 And dest.row >= firstRow And dest.row < totalRow Then
-            If dest.Column >= 7 And dest.Column <= 9 Then
+            If dest.column >= 7 And dest.column <= 9 Then
                 If Len(CellText(dest)) > 0 Then
                     If Not IsNumeric(dest.Value2) Then UnicodeMessage UI(12) & " " & dest.row, vbExclamation: QueueEntry dest: GoTo Done
                     If CDbl(dest.Value2) < 0 Or CDbl(dest.Value2) <> Fix(CDbl(dest.Value2)) Then UnicodeMessage UI(12) & " " & dest.row, vbExclamation: QueueEntry dest: GoTo Done
                 End If
-                QueueEntry Sh.Cells(dest.row, dest.Column + 1)
-            ElseIf dest.Column = 10 Then
+                QueueEntry Sh.Cells(dest.row, dest.column + 1)
+            ElseIf dest.column = 10 Then
                 If Len(CellText(dest)) > 0 Then
                     If Not IsNumeric(dest.Value2) Then UnicodeMessage UI(57) & " " & dest.row, vbExclamation: QueueEntry dest: GoTo Done
                     If CDbl(dest.Value2) <= 0 Or CDbl(dest.Value2) > 2958465 Then UnicodeMessage UI(57) & " " & dest.row, vbExclamation: QueueEntry dest: GoTo Done
                 End If
                 QueueEntry Sh.Cells(dest.row, 12)
-            ElseIf dest.Column = 12 Then
+            ElseIf dest.column = 12 Then
                 QueueEntry Sh.Cells(dest.row, 13)
-            ElseIf dest.Column = 13 Then
+            ElseIf dest.column = 13 Then
                 If dest.row < totalRow - 1 Then
                     QueueEntry Sh.Cells(dest.row + 1, 3)
                 Else
@@ -1149,6 +1055,7 @@ Public Sub HandleChange(ByVal Sh As Object, ByVal target As Excel.Range)
         WS(MAIN).Calculate
     End If
 Done:
+    ProtectFormulaCells
     Application.EnableEvents = oldEvents
     ConfigureEntryMode
     Exit Sub
@@ -1175,11 +1082,32 @@ Public Sub HandleDoubleClick(ByVal Sh As Object, ByVal target As Excel.Range, By
             ReprintSavedSheet Sh.name
         End If
     ElseIf Sh.name = "Archive" Then
-        If target.row >= 5 And target.Column = 9 Then
+        If target.row >= 5 And target.column = 9 Then
             Cancel = True
             ReprintArchive
         End If
     End If
+End Sub
+
+Public Sub ProtectFormulaCells()
+    Dim sheet As Excel.Worksheet, formulas As Excel.Range, cell As Excel.Range
+    For Each sheet In ThisWorkbook.Worksheets
+        If Not IsSavedReceiptSheet(sheet.Name) Then
+            sheet.Unprotect
+            Set formulas = Nothing
+            On Error Resume Next
+            Set formulas = sheet.UsedRange.SpecialCells(xlCellTypeFormulas)
+            On Error GoTo 0
+            If Not formulas Is Nothing Then
+                sheet.UsedRange.Locked = False
+                For Each cell In formulas.Cells
+                    cell.MergeArea.Locked = True
+                Next cell
+                sheet.Protect DrawingObjects:=True, Contents:=True, Scenarios:=True, UserInterfaceOnly:=True, AllowFiltering:=True
+                sheet.EnableSelection = xlNoRestrictions
+            End If
+        End If
+    Next sheet
 End Sub
 
 Public Sub Initialize()
@@ -1187,6 +1115,7 @@ Public Sub Initialize()
     oldEvents = Application.EnableEvents
     On Error GoTo Failed
     Application.EnableEvents = False
+    WS(MAIN).Unprotect
     InvalidateSearchCaches
     RestoreSearchStatus
     BeginEntryMode
@@ -1210,8 +1139,7 @@ Public Sub Initialize()
     WS(MAIN).Calculate
 Done:
     Application.EnableEvents = oldEvents
-    WS(MAIN).Activate
-    WS(MAIN).Range("B6").Select
+    ProtectFormulaCells
     TrackEntry
     Exit Sub
 Failed:
@@ -1280,18 +1208,17 @@ Private Function ValidForm() As Boolean
                     quantity = quantity + CDbl(value)
                 End If
             Next c
-            If quantity = 0 Then UnicodeMessage UI(12) & " " & r, vbExclamation: Exit Function
+            If quantity = 0 And StrComp(Normal(code), "m500", vbBinaryCompare) <> 0 Then UnicodeMessage UI(12) & " " & r, vbExclamation: Exit Function
         End If
     Next r
     If entries = 0 Then UnicodeMessage UI(13), vbExclamation: Exit Function
     ValidForm = True
 End Function
 
-Private Function ReceiptFileName(ByVal number As Long) As String
+Private Function ReceiptFileName(ByVal number As Long, Optional ByVal customerName As String = "") As String
     Dim baseName As String, suffix As String, bad As Variant, i As Long
-    baseName = ThisWorkbook.name
-    If InStrRev(baseName, ".") > 0 Then suffix = LCase$(Mid$(baseName, InStrRev(baseName, ".")))
-    If suffix = ".xlsm" Or suffix = ".xlsx" Or suffix = ".xlsb" Or suffix = ".xls" Then baseName = Left$(baseName, InStrRev(baseName, ".") - 1)
+    baseName = Trim$(customerName)
+    If Len(baseName) = 0 Then baseName = CellText(WS(MAIN).Range("B8"))
     For Each bad In Array("\", "/", ":", "*", "?", Chr$(34), "<", ">", "|")
         baseName = Replace(baseName, CStr(bad), "_")
     Next bad
@@ -1341,18 +1268,19 @@ Private Sub PrepareReceiptCopy(ByVal number As Long, ByVal totalRow As Long, ByR
     WS(MAIN).Copy
     Set temporary = Application.ActiveWorkbook
     Set receipt = temporary.Worksheets(1)
+    receipt.Unprotect
     receipt.Range(address).Copy
     receipt.Range(address).PasteSpecial xlPasteValues
     Application.CutCopyMode = False
     receipt.Range("I6").value = Now
     receipt.Range("L8").value = "#" & CStr(number)
     receipt.Range("L6").MergeArea.ClearContents
-    lookupLast = Application.Max(receipt.Cells(receipt.Rows.Count, 27).End(xlUp).Row, receipt.Cells(receipt.Rows.Count, 28).End(xlUp).Row)
+    lookupLast = Application.Max(receipt.Cells(receipt.rows.count, 27).End(xlUp).row, receipt.Cells(receipt.rows.count, 28).End(xlUp).row)
     If lookupLast >= 1 Then receipt.Range("AA1:AB" & lookupLast).ClearContents
-    usedLast = receipt.UsedRange.Row + receipt.UsedRange.Rows.Count - 1
+    usedLast = receipt.UsedRange.row + receipt.UsedRange.rows.count - 1
     If usedLast > 36 Then
         If Application.CountA(receipt.Range("A37:M" & usedLast)) = 0 Then
-            receipt.Rows("37:" & usedLast).Delete
+            receipt.rows("37:" & usedLast).Delete
         End If
     End If
     receipt.Range(address).Validation.Delete
@@ -1372,30 +1300,13 @@ Private Sub RestoreCells(ByVal target As Excel.Range, ByVal saved As Variant)
     Dim cell As Excel.Range
     For Each cell In target.Cells
         If cell.address = cell.MergeArea.Cells(1, 1).address Then
-            cell.Formula = saved(cell.row - target.row + 1, cell.Column - target.Column + 1)
+            cell.Formula = saved(cell.row - target.row + 1, cell.column - target.column + 1)
         End If
     Next cell
 End Sub
 
-Private Sub RemoveUncommittedReceipt(ByVal saved As Excel.Worksheet)
-    Dim alerts As Boolean
-    alerts = Application.DisplayAlerts
-    On Error Resume Next
-    Application.DisplayAlerts = False
-    If Not saved Is Nothing Then saved.Delete
-    Application.DisplayAlerts = alerts
-    On Error GoTo 0
-End Sub
-
-Private Sub KeepReceipt(ByVal receipt As Excel.Worksheet, ByVal number As Long, ByRef saved As Excel.Worksheet)
-    receipt.Copy After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.count)
-    Set saved = ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.count)
-    saved.name = "RET_" & Format$(number, "000000")
-    saved.Protect DrawingObjects:=True, Contents:=True, Scenarios:=True
-End Sub
-
 Public Sub ArchiveAndPrint()
-    Dim form As Excel.Worksheet, log As Excel.Worksheet, receipt As Excel.Worksheet, temporary As Excel.Workbook, saved As Excel.Worksheet
+    Dim form As Excel.Worksheet, log As Excel.Worksheet, receipt As Excel.Worksheet, temporary As Excel.Workbook
     Dim firstRow As Long, totalRow As Long, number As Long, logRow As Long
     Dim pdfPath As String, relativeName As String, paper As Boolean, errorText As String, paperError As String
     Dim oldEvents As Boolean, oldScreen As Boolean, oldCounter As Variant
@@ -1452,7 +1363,6 @@ Public Sub ArchiveAndPrint()
     PrepareReceiptCopy number, totalRow, temporary, receipt
     ExportReceiptPDF receipt, pdfPath
     pdfSaved = True
-    KeepReceipt receipt, number, saved
     logRow = LastRow(log, 15) + 1
     If logRow < 5 Then logRow = 5
     If logRow > 5 Then
@@ -1461,7 +1371,6 @@ Public Sub ArchiveAndPrint()
         Application.CutCopyMode = False
     End If
     log.Cells(logRow, 1).Value2 = number
-    log.Hyperlinks.Add Anchor:=log.Cells(logRow, 1), address:="", SubAddress:="'" & saved.name & "'!A1", TextToDisplay:=CStr(number)
     log.Cells(logRow, 2).value = Now
     log.Cells(logRow, 2).NumberFormat = "yyyy-mm-dd hh:mm"
     log.Cells(logRow, 3).NumberFormat = "@"
@@ -1480,9 +1389,9 @@ Public Sub ArchiveAndPrint()
     log.Cells(logRow, 14).Value2 = form.Range("L35").Value2
     log.Cells(logRow, 15).Value2 = ReceiptWarehouses(firstRow, totalRow)
     log.Cells(logRow, 15).WrapText = True
-    log.Rows(logRow).AutoFit
+    log.rows(logRow).AutoFit
     log.Cells(logRow, 9).Value2 = UI(42)
-    log.Hyperlinks.Add Anchor:=log.Cells(logRow, 10), address:=relativeName, TextToDisplay:=relativeName
+    log.Hyperlinks.Add anchor:=log.Cells(logRow, 10), address:=relativeName, TextToDisplay:=relativeName
     resetStarted = True
     form.Range("A8").MergeArea.ClearContents
     form.Range("B8").MergeArea.ClearContents
@@ -1525,7 +1434,6 @@ Failed:
     errorText = Err.Description
     On Error Resume Next
     If Not committed And backupReady Then
-        RemoveUncommittedReceipt saved
         If resetStarted Then
             RestoreCells form.Range(form.Cells(firstRow, 2), form.Cells(totalRow - 1, 10)), itemBackup
             RestoreCells form.Range(form.Cells(firstRow, 12), form.Cells(totalRow - 1, 13)), noteBackup
@@ -1578,14 +1486,14 @@ Private Sub OpenLogPDF(ByVal row As Long, Optional ByVal legacyName As String = 
         If Len(legacyName) = 0 Then legacyName = CStr(log.Cells(row, 10).Value2)
         If Not IsSavedReceiptSheet(legacyName) Then Err.Raise vbObjectError + 924, "OpenLogPDF", UI(54)
         Set receipt = ThisWorkbook.Worksheets(legacyName)
-        address = ReceiptFileName(number)
+        address = ReceiptFileName(number, CStr(log.Cells(row, 4).Value2))
         path = FolderPath() & address
         Application.EnableEvents = False
         BusyPrinting = True
         If Not FileExists(path) Then ExportReceiptPDF receipt, path
         If Not ThisWorkbook.ReadOnly Then
             log.Cells(row, 10).Hyperlinks.Delete
-            log.Hyperlinks.Add Anchor:=log.Cells(row, 10), address:=address, TextToDisplay:=address
+            log.Hyperlinks.Add anchor:=log.Cells(row, 10), address:=address, TextToDisplay:=address
             log.Cells(row, 9).Value2 = UI(42)
             ThisWorkbook.Save
         End If
