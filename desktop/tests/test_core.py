@@ -43,6 +43,8 @@ def test_receipt_pdf_idempotency_immutable_snapshot(store):
     assert first==again and store.settings()['next_serial']==first['serial']+1
     snapshot,pdf=store.receipt(first['serial']);reader=PdfReader(io.BytesIO(pdf))
     assert len(reader.pages)==1 and pdf.startswith(b'%PDF')
+    fonts=reader.pages[0]['/Resources']['/Font'].get_object()
+    assert any('IBMPlexSansArabic-Medium' in str(f.get_object().get('/BaseFont','')) and f.get_object().get('/FontDescriptor') for f in fonts.values())
     import unicodedata
     text=unicodedata.normalize('NFKC',reader.pages[0].extract_text())
     assert 'المحاسب' in text and 'أمين الصندوق' in text

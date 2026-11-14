@@ -65,8 +65,24 @@ def test_lost_ack_keeps_draft_and_retry_does_not_duplicate(app,window):
 
 
 def test_qt_print_backend_emits_requested_two_copies(app,window,tmp_path):
-    w,api,store=window;receipt=store.create_receipt(ReceiptInput(**w.payload()));pdf=store.receipt(receipt['serial'])[1]
+    w,api,store=window
+    assert 'IBM Plex Sans Arabic' in app.font().family()
+    receipt=store.create_receipt(ReceiptInput(**w.payload()));pdf=store.receipt(receipt['serial'])[1]
     printer=QPrinter(QPrinter.PrinterMode.HighResolution);printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat);printer.setOutputFileName(str(tmp_path/'copies.pdf'));printer.setPageSize(QPageSize(QPageSize.PageSizeId.A4));printer.setPageOrientation(QPageLayout.Orientation.Landscape);printer.setCopyCount(2)
     w.print_content(receipt['serial'],pdf,printer);wait(app,lambda:not w.tasks.callbacks)
     assert len(PdfReader(tmp_path/'copies.pdf').pages)==2
     with store.connect() as c:assert c.execute('SELECT copies,success FROM print_events').fetchone()['copies']==2
+
+
+def test_search_does_not_select_stale_results_after_typing(app,window):
+    w,api,store=window
+    dialog=ui.SearchDialog(api,'customers',w)
+    wait(app,lambda:not dialog.tasks.callbacks)
+    dialog.rows=[store.search('customers')['items'][0]]
+    ui.fill(dialog.grid,[[dialog.rows[0]['name'],dialog.rows[0]['code']]])
+    dialog.grid.selectRow(0)
+    dialog.query.setText('بحث مختلف قبل اكتمال الطلب')
+    dialog.choose()
+    assert dialog.result()!=dialog.DialogCode.Accepted and dialog.selected is None
+    wait(app,lambda:not dialog.tasks.callbacks)
+    dialog.close()

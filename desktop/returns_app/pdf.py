@@ -12,7 +12,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.lib import colors
 
 ASSETS = Path(__file__).parent / 'assets'
-pdfmetrics.registerFont(TTFont('Arabic', str(ASSETS / 'Arabic.ttf')))
+pdfmetrics.registerFont(TTFont('Arabic', str(ASSETS / 'IBMPlexSansArabic-Medium.ttf')))
 PALETTE = ['#ffc7ce', '#f8cbad', '#ffeb9c', '#c6efce']
 
 

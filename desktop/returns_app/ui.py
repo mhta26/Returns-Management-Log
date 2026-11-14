@@ -8,7 +8,7 @@ from pathlib import Path
 from datetime import date
 from urllib.parse import urlencode
 from PySide6.QtCore import Qt,QDate,QTimer,QStandardPaths,QUrl,QByteArray,QBuffer,QIODevice,QSize,QRectF
-from PySide6.QtGui import QColor,QPainter,QDesktopServices,QFont,QPageSize,QPageLayout,QPixmap,QIcon
+from PySide6.QtGui import QColor,QPainter,QDesktopServices,QFont,QPageSize,QPageLayout,QPixmap,QIcon,QFontDatabase
 from PySide6.QtWidgets import (QApplication,QMainWindow,QWidget,QVBoxLayout,QHBoxLayout,QGridLayout,QFormLayout,QLabel,QPushButton,QLineEdit,QDateEdit,QSpinBox,QComboBox,QTableWidget,QTableWidgetItem,QHeaderView,QAbstractItemView,QTabWidget,QListWidget,QStackedWidget,QDialog,QDialogButtonBox,QMessageBox,QFileDialog,QInputDialog,QTextEdit,QSplitter,QFrame,QCheckBox)
 from PySide6.QtPrintSupport import QPrinter,QPrintDialog
 from PySide6.QtPdf import QPdfDocument
@@ -18,7 +18,7 @@ from .domain import status_for,now
 from .pdf import PALETTE,ASSETS
 
 STYLE='''
-QWidget{font-family:"Segoe UI","DejaVu Sans";font-size:13px;color:#152c42;}
+QWidget{font-family:"IBM Plex Sans Arabic Medium";font-size:13px;color:#152c42;}
 QMainWindow,QDialog{background:#f3f6fa;}
 QLineEdit,QComboBox,QDateEdit,QSpinBox,QTextEdit{background:white;border:1px solid #cdd7e3;border-radius:7px;padding:7px;min-height:23px;}
 QLineEdit:focus,QComboBox:focus{border:1px solid #087e8b;}
@@ -35,6 +35,18 @@ QLabel#badge{background:#e1f3ef;color:#12684e;border-radius:8px;padding:7px;}
 QFrame#card{background:white;border:1px solid #dce5ed;border-radius:10px;}
 QTabWidget::pane{border:1px solid #d8e1ea;background:white;}QTabBar::tab{padding:12px;background:#e1eaf3;}QTabBar::tab:selected{background:#143e68;color:white;}
 '''
+
+
+_font_loaded = False
+
+def install_font(app):
+    global _font_loaded
+    if not _font_loaded:
+        font_id=QFontDatabase.addApplicationFont(str(ASSETS/'IBMPlexSansArabic-Medium.ttf'))
+        families=QFontDatabase.applicationFontFamilies(font_id)
+        if font_id<0 or not families:raise RuntimeError('تعذر تحميل خط البرنامج المضمّن.')
+        app.setFont(QFont(families[0],10))
+        _font_loaded=True
 
 
 def button(text,slot=None,secondary=False):
@@ -71,7 +83,7 @@ def atomic_json(path,value):
 
 class LoginDialog(QDialog):
     def __init__(self,parent=None):
-        super().__init__(parent);self.setWindowTitle('تسجيل الدخول • إدارة المرتجعات');self.resize(490,360)
+        super().__init__(parent);install_font(QApplication.instance());self.setWindowTitle('تسجيل الدخول • إدارة المرتجعات');self.resize(490,360)
         v=QVBoxLayout(self);title=QLabel('مرحبًا بك');title.setObjectName('title');v.addWidget(title)
         v.addWidget(QLabel('بيانات موحّدة لكل الأجهزة • حساب مستقل لكل أمين صندوق'))
         self.config_path=app_dir()/'connection.json'
@@ -102,16 +114,21 @@ class SearchDialog(QDialog):
         h=QHBoxLayout();h.addWidget(button('السابق',lambda:self.page(-1),True));h.addWidget(button('التالي',lambda:self.page(1),True));h.addStretch();h.addWidget(button('اختيار',self.choose));h.addWidget(button('إلغاء',self.reject,True));v.addLayout(h)
         self.tasks=Tasks(self);self.timer=QTimer(self);self.timer.setSingleShot(True);self.timer.setInterval(220)
         self.query.textChanged.connect(self.schedule);self.timer.timeout.connect(self.load);self.grid.doubleClicked.connect(self.choose);self.query.returnPressed.connect(self.choose);self.load()
-    def schedule(self):self.offset=0;self.timer.start()
+    def schedule(self):
+        self.offset=0;self.generation+=1;self.grid.setEnabled(False);self.timer.start()
     def page(self,delta):self.offset=max(0,self.offset+delta*100);self.load()
     def load(self):
+        self.timer.stop();self.grid.setEnabled(False)
         self.generation+=1;generation=self.generation;path='/api/masters/'+self.kind+'?'+urlencode({'q':self.query.text(),'offset':self.offset})
         self.tasks.submit(lambda:self.api.call('GET',path),lambda r:self.loaded(r,generation),lambda e:self.count.setText(e))
     def loaded(self,result,generation):
         if generation!=self.generation:return
+        self.grid.setEnabled(True)
         self.rows=result['items'];fill(self.grid,[[r['name'],r['code']] for r in self.rows]);self.count.setText(f"{self.offset+1 if self.rows else 0}–{self.offset+len(self.rows)} من {result['total']}")
         if self.rows:self.grid.selectRow(0)
     def choose(self):
+        if self.timer.isActive():self.load();return
+        if not self.grid.isEnabled():return
         row=self.grid.currentRow()
         if 0<=row<len(self.rows):self.selected=self.rows[row];self.accept()
 
@@ -127,7 +144,7 @@ class PdfDialog(QDialog):
 
 class MainWindow(QMainWindow):
     def __init__(self,api,identity):
-        super().__init__();self.api=api;self.identity=identity;self.tasks=Tasks(self);self.settings=None;self.customer=None;self.driver=None;self.lines=[];self.pending=None;self.request_id=str(uuid.uuid4());self.restoring=False;self.draft_path=app_dir()/('draft-'+identity['username']+'.json');self.pending_printer=None
+        super().__init__();install_font(QApplication.instance());self.api=api;self.identity=identity;self.tasks=Tasks(self);self.settings=None;self.customer=None;self.driver=None;self.lines=[];self.pending=None;self.request_id=str(uuid.uuid4());self.restoring=False;self.draft_path=app_dir()/('draft-'+identity['username']+'.json');self.pending_printer=None
         self.setWindowTitle('إدارة المرتجعات • Shanifi');self.resize(1440,910);self.setMinimumSize(1050,700)
         self.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
         root=QWidget();self.setCentralWidget(root);main=QHBoxLayout(root);main.setContentsMargins(16,16,16,16)
@@ -500,7 +517,7 @@ class MainWindow(QMainWindow):
 
 
 def main():
-    app=QApplication(sys.argv);app.setApplicationName('ReturnsManager');app.setOrganizationName('Shanifi');app.setLayoutDirection(Qt.LayoutDirection.RightToLeft);app.setStyle('Fusion');app.setStyleSheet(STYLE);app.setFont(QFont('Segoe UI',10))
+    app=QApplication(sys.argv);app.setApplicationName('ReturnsManager');app.setOrganizationName('Shanifi');app.setLayoutDirection(Qt.LayoutDirection.RightToLeft);app.setStyle('Fusion');app.setStyleSheet(STYLE);install_font(app)
     while True:
         login=LoginDialog()
         if login.exec()!=QDialog.DialogCode.Accepted:return 0
