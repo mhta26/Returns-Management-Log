@@ -3,6 +3,7 @@ import hmac
 import json
 import os
 import secrets
+from contextlib import closing
 from pathlib import Path
 from typing import Annotated
 from fastapi import FastAPI, Header, Depends, HTTPException, Request
@@ -199,13 +200,14 @@ def main():
     args=parser.parse_args();args.data_dir.mkdir(parents=True,exist_ok=True)
     if args.restore:
         import sqlite3
-        with sqlite3.connect(f'file:{args.restore.resolve().as_posix()}?mode=ro',uri=True) as source:
+        with closing(sqlite3.connect(f'file:{args.restore.resolve().as_posix()}?mode=ro',uri=True)) as source:
             if source.execute('PRAGMA integrity_check').fetchone()[0]!='ok':raise SystemExit('النسخة الاحتياطية غير سليمة.')
             if not source.execute("SELECT 1 FROM sqlite_master WHERE name='receipts'").fetchone():raise SystemExit('ليست نسخة إدارة المرتجعات.')
             # Restore only with no existing destination; user keeps current data safely.
             destination=args.data_dir/'returns.sqlite'
             if destination.exists():raise SystemExit('اختر مجلد بيانات جديدًا للاستعادة؛ لم تُستبدل البيانات الحالية.')
-            with sqlite3.connect(destination) as target:source.backup(target)
+            with closing(sqlite3.connect(destination)) as target:
+                with target:source.backup(target)
     credentials=args.data_dir/'connection-keys.json'
     if not credentials.exists():
         credentials.write_text(json.dumps({'staff_token':secrets.token_urlsafe(32),'admin_token':secrets.token_urlsafe(32)},indent=2),encoding='utf-8')

@@ -5,7 +5,7 @@ import io
 import json
 import sqlite3
 import tempfile
-from contextlib import contextmanager
+from contextlib import contextmanager, closing
 from pathlib import Path
 from datetime import date
 from .domain import now, normalized, status_for, ReceiptInput, SettingsInput
@@ -198,8 +198,9 @@ class Store:
     def backup_bytes(self):
         with tempfile.TemporaryDirectory() as tmp:
             path=Path(tmp)/'backup.sqlite'
-            with self.connect() as source,sqlite3.connect(path) as target:
-                source.backup(target)
+            with self.connect() as source,closing(sqlite3.connect(path)) as target:
+                with target:
+                    source.backup(target)
             return path.read_bytes()
 
     def setup_users(self, bootstrap_password):
