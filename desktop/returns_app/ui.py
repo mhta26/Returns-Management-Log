@@ -299,10 +299,10 @@ class MainWindow(QMainWindow):
         painter=QPainter();error='';success=False;requested_copies=printer.copyCount()
         try:
             if doc.pageCount()<1:raise RuntimeError('تعذر قراءة PDF.')
-            if not painter.begin(printer):raise RuntimeError('تعذر الاتصال بالطابعة.')
-            # Render at 180dpi; the canonical archived PDF remains vector quality.
             manual_copies = 1 if printer.supportsMultipleCopies() else requested_copies
             if manual_copies>1:printer.setCopyCount(1)
+            if not painter.begin(printer):raise RuntimeError('تعذر الاتصال بالطابعة.')
+            # Render at 180dpi; the canonical archived PDF remains vector quality.
             page_index=0
             for copy in range(manual_copies):
                 for page in range(doc.pageCount()):
