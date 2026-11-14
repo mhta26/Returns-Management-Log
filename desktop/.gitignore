@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+.pytest_cache/
+build/
+dist/
+release/
+*.spec
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+connection-keys.json
