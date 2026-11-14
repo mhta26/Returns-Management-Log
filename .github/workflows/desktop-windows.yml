@@ -3,6 +3,9 @@ on:
   push:
     paths: ['desktop/**', '.github/workflows/desktop-windows.yml']
   workflow_dispatch:
+concurrency:
+  group: desktop-windows-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: write
 jobs:
@@ -35,10 +38,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view desktop-v1.0.0 --repo $env:GITHUB_REPOSITORY 2>$null
+          gh release view desktop-v1.0.1 --repo $env:GITHUB_REPOSITORY 2>$null
           if ($LASTEXITCODE -ne 0) {
-            gh release create desktop-v1.0.0 --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title "Returns Manager Desktop 1.0.0" --notes-file desktop/RELEASE_NOTES.md
+            gh release create desktop-v1.0.1 --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title "Returns Manager Desktop 1.0.1" --notes-file desktop/RELEASE_NOTES.md
             if ($LASTEXITCODE -ne 0) { throw 'Release creation failed' }
           }
-          gh release upload desktop-v1.0.0 desktop/release/* --repo $env:GITHUB_REPOSITORY --clobber
+          gh release upload desktop-v1.0.1 desktop/release/* --repo $env:GITHUB_REPOSITORY --clobber
           if ($LASTEXITCODE -ne 0) { throw 'Release upload failed' }

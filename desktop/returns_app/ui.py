@@ -67,7 +67,8 @@ def table(headers):
 def fill(t,rows):
     t.setRowCount(len(rows))
     for r,row in enumerate(rows):
-        for c,value in enumerate(row):t.setItem(r,c,QTableWidgetItem(str(value if value is not None else '')))
+        for c,value in enumerate(row):
+            item=QTableWidgetItem(str(value if value is not None else ''));item.setToolTip(item.text());t.setItem(r,c,item)
     t.resizeColumnsToContents()
     for c in range(t.columnCount()):
         if t.columnWidth(c)>360:t.setColumnWidth(c,360)
@@ -252,6 +253,10 @@ class MainWindow(QMainWindow):
             status,index,_=status_for(date.fromisoformat(line['expiry']),now().date(),self.settings);indices.append(index)
             rows.append([i,line['product']['code'],line['product']['name'],line['cartons'],line['boxes'],line['pieces'],line['expiry'],status,line['reason'],line['notes']])
         fill(self.line_grid,rows)
+        header=self.line_grid.horizontalHeader();header.setStretchLastSection(False)
+        header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        for column,width in {0:32,1:118,3:50,4:50,5:50,6:102,7:125,8:125,9:135}.items():self.line_grid.setColumnWidth(column,width)
+        header.setSectionResizeMode(2,QHeaderView.ResizeMode.Stretch)
         for row,index in enumerate(indices):self.line_grid.item(row,7).setBackground(QColor(PALETTE[index]))
         self.totals.setText(f"عدد الأصناف: {len(self.lines)}     كرتون: {sum(l['cartons'] for l in self.lines)}     علبة: {sum(l['boxes'] for l in self.lines)}     حبة: {sum(l['pieces'] for l in self.lines)}")
 

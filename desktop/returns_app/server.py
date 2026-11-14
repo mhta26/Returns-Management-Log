@@ -94,7 +94,7 @@ def create_app(data_dir:Path,staff_token:str,admin_token:str,bootstrap_password:
     def update_user(username:str,value:UserUpdate):store.update_user(username,**value.model_dump());return {'ok':True}
 
     @app.get('/health')
-    def health():return {'status':'ok','version':'1.0.0'}
+    def health():return {'status':'ok','version':'1.0.1'}
 
     @app.get('/api/session')
     def session(identity=Depends(auth)):return {**identity,'server_time':now().isoformat(),'settings':store.settings()}

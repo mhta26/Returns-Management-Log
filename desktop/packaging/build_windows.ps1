@@ -8,11 +8,15 @@ if ($LASTEXITCODE -ne 0) { throw 'Server build failed' }
 if ($LASTEXITCODE -ne 0) { throw 'Packaged server smoke test failed' }
 $clientTest = Start-Process -FilePath '.\dist\ReturnsManager\ReturnsManager.exe' -ArgumentList '--self-test' -PassThru -Wait
 if ($clientTest.ExitCode -ne 0) { throw 'Packaged client smoke test failed' }
+New-Item -ItemType Directory -Force release | Out-Null
+$commit = git rev-parse HEAD
+$fontHash = (Get-FileHash 'returns_app/assets/IBMPlexSansArabic-Medium.ttf' -Algorithm SHA256).Hash
+@("Version: 1.0.1", "Commit: $commit", "Font: IBM Plex Sans Arabic Medium", "Font SHA256: $fontHash") | Set-Content -Encoding utf8 'release/BUILD_INFO.txt'
 $compiler = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
 if (Test-Path $compiler) {
   & $compiler 'packaging\installer.iss'
   if ($LASTEXITCODE -ne 0) { throw 'Installer build failed' }
 }
 New-Item -ItemType Directory -Force release | Out-Null
-Compress-Archive -Path 'dist\ReturnsManager','dist\ReturnsServer','README.md','OPERATIONS.md','THIRD_PARTY.md' -DestinationPath 'release\ReturnsManager-Portable-Windows-x64.zip' -Force
+Compress-Archive -Path 'dist\ReturnsManager','dist\ReturnsServer','README.md','OPERATIONS.md','THIRD_PARTY.md','release/BUILD_INFO.txt' -DestinationPath 'release\ReturnsManager-Portable-Windows-x64.zip' -Force
 Get-ChildItem release -File | Get-FileHash -Algorithm SHA256 | ForEach-Object { "$($_.Hash)  $(Split-Path $_.Path -Leaf)" } | Set-Content 'release\SHA256SUMS.txt'

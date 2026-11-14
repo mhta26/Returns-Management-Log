@@ -1,4 +1,4 @@
-#define AppVersion "1.0.0"
+#define AppVersion "1.0.1"
 [Setup]
 AppId={{C0AEE46B-20BA-4051-AC73-0D4179E11AA4}
 AppName=Shanifi Returns Manager
@@ -27,6 +27,8 @@ Source: "..\dist\ReturnsServer\*"; DestDir: "{app}\Server"; Flags: ignoreversion
 Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\OPERATIONS.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\THIRD_PARTY.md"; DestDir: "{app}"; Flags: ignoreversion
+
+Source: "..\release\BUILD_INFO.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\Returns Manager"; Filename: "{app}\Client\ReturnsManager.exe"

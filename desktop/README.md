@@ -2,7 +2,7 @@
 
 تطبيق Windows ‏10/11 **64 بت** بواجهة عربية من اليمين لليسار بخط **IBM Plex Sans Arabic Medium** المرفق والمضمّن في الواجهة وPDF، وخادم مركزي للأجهزة المشتركة. يعمل دون Excel أو وحدات VBA، ودون اشتراك سحابي. تبقى المصنفات الأصلية في المستودع كما هي.
 
-[حزم التثبيت والتنزيل](https://github.com/mhta26/Returns-Management-Log/releases/tag/desktop-v1.0.0) · [دليل التشغيل والشبكة والنسخ الاحتياطي](OPERATIONS.md)
+[حزم التثبيت والتنزيل](https://github.com/mhta26/Returns-Management-Log/releases/tag/desktop-v1.0.1) · [دليل التشغيل والشبكة والنسخ الاحتياطي](OPERATIONS.md)
 
 ## الوظائف
 

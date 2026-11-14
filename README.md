@@ -4,7 +4,7 @@
 
 أُضيف تطبيق Windows عربي مستقل في [desktop](desktop/README.md)، بخادم مركزي، وحسابات مستخدمين (أول حساب: مطيع)، واسم أمين الصندوق من تسجيل الدخول، وإدارة العملاء والأصناف والسائقين، والأرشفة والطباعة وPDF والنسخ الاحتياطي.
 
-[تنزيل تطبيق Windows](https://github.com/mhta26/Returns-Management-Log/releases/tag/desktop-v1.0.0) · [دليل تشغيل الأجهزة](desktop/OPERATIONS.md). ينتج بناء GitHub Actions حزمة التثبيت والنسخة المحمولة بعد نجاح اختبارات Windows. المصنفات الأصلية أدناه محفوظة ولم تُستبدل.
+[تنزيل تطبيق Windows](https://github.com/mhta26/Returns-Management-Log/releases/tag/desktop-v1.0.1) · [دليل تشغيل الأجهزة](desktop/OPERATIONS.md). ينتج بناء GitHub Actions حزمة التثبيت والنسخة المحمولة بعد نجاح اختبارات Windows. المصنفات الأصلية أدناه محفوظة ولم تُستبدل.
 
 
 **النسخة الحالية المراجعة:** [تنزيل المصنف](Returns_Management_PDF_Archive.xlsm) · [تقرير المراجعة](REVIEW_PDF_ARCHIVE.md)
